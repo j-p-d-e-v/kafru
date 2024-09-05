@@ -300,41 +300,32 @@ mod test_rayon {
     }
 
     use rayon::ThreadPoolBuilder;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, atomic::{AtomicU16, Ordering} };
     use rand::prelude::*;
 
     #[test]
     fn test_thread_pool(){
         let tp: rayon::ThreadPool = ThreadPoolBuilder::new().num_threads(5).build().unwrap();
-
-        //tp.broadcast(|ctx| {
-        //    println!("broadcast: {:?}",ctx);
-        //});
         
         tp.scope(|s| {
-            let mut threads_used: Arc<Mutex<Vec<u64>>> = Arc::new(Vec::new());
-            //let doit = |i: u64| {
-            //    let length: u64 = rand::thread_rng().gen_range(100..1000);
-            //    let sleep: u64 = rand::thread_rng().gen_range(1..10);
-            //    for x in 0..length {
-            //        println!("counter from: {}, {}",i,x);
-            //        std::thread::sleep(std::time::Duration::from_secs(sleep));
-            //    }
-            //    println!("completed doit {}",i);
-            //};
-            for i in 0..10 {
-                let mut t = threads_used.clone();
+            let available_threads: Arc<AtomicU16> = Arc::new(AtomicU16::new(5));
+            for i in 1..6 {
+                let counter: Arc<AtomicU16> = available_threads.clone();
                 s.spawn(move|_| {
+                    counter.fetch_sub(1, Ordering::SeqCst);
+                    println!("started thread: {}", i);
                     let sleep: u64 = rand::thread_rng().gen_range(1..2);
-                    for x in 0..5 {
+                    for _ in 0..5 {
                         std::thread::sleep(std::time::Duration::from_secs(sleep));
-                        if i == 6 && x == 4 {
-                            panic!("oops {}",i);
-                        }                        
                     }
-                    println!("completed: {}",i);
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    println!("completed thread: {}", i);
                 });
-                println!("total threads available: {}",threads_used.clone().len());
+            }
+            loop {
+                let counter = available_threads.clone();
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                println!("available_threads: {:?}",counter);
             }
         });
     }
