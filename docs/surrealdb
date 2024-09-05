@@ -1,0 +1,1 @@
+surreal.exe start -u root -p root -b 0.0.0.0:8000 --allow-all 
