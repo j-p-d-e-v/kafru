@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test_database {
     use crate::tests::test_helper::configure_database_env;
-    use crate::queue::{Queue, TaskData, TaskStatus};
+    use crate::queue::{Queue, QueueData, QueueStatus};
     use fake::{
         Fake,
         faker::{
@@ -20,7 +20,7 @@ mod test_database {
         configure_database_env();
         let queue: Queue = Queue::new().await;
         // Push task to the queue
-        let result: Result<TaskData, String> = queue.push(TaskData {
+        let result: Result<QueueData, String> = queue.push(QueueData {
             name: Some(Name().fake::<String>()),
             handler:Some("mytesthandler".to_string()),
             parameters: Some(HashMap::from([
@@ -36,26 +36,26 @@ mod test_database {
             ..Default::default()
         }).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
-        let record: TaskData = result.unwrap();
-        assert_eq!(record.status,Some(TaskStatus::Waiting));
+        let record: QueueData = result.unwrap();
+        assert_eq!(record.status,Some(QueueStatus::Waiting));
         
         // Update task in the queue
-        let result: Result<TaskData, String> = queue.update(record.id.unwrap(),TaskData {
-            status: Some(TaskStatus::Completed),
+        let result: Result<QueueData, String> = queue.update(record.id.unwrap(),QueueData {
+            status: Some(QueueStatus::Completed),
             ..Default::default()
         }).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
-        let record: TaskData = result.unwrap();
-        assert_eq!(record.status,Some(TaskStatus::Completed));
+        let record: QueueData = result.unwrap();
+        assert_eq!(record.status,Some(QueueStatus::Completed));
 
         // Get task in the queue
-        let result: Result<TaskData, String> = queue.get(record.id.clone().unwrap()).await;
+        let result: Result<QueueData, String> = queue.get(record.id.clone().unwrap()).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
-        let _record: TaskData = result.unwrap();
+        let _record: QueueData = result.unwrap();
         assert_eq!(record.id,_record.id);
 
         // Remove the task
-        let result: Result<TaskData, String> = queue.remove(record.id.clone().unwrap()).await;
+        let result: Result<QueueData, String> = queue.remove(record.id.clone().unwrap()).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
 
         // Purge tasks
@@ -64,18 +64,18 @@ mod test_database {
 
         // List tasks by WAITING ONLY
         for i in 0..10 {
-            let _ = queue.push(TaskData {
+            let _ = queue.push(QueueData {
                 name: Some(format!("{}-{}",Name().fake::<String>(),i)),
                 handler:Some("mytesthandler".to_string()),
                 ..Default::default()
             }).await;
         }
-        let result: Result<Vec<TaskData>, String> = queue.list(vec!["Waiting".to_string()],Some(5 as u64)).await;
+        let result: Result<Vec<QueueData>, String> = queue.list(vec!["Waiting".to_string()],Some(5 as u64)).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
         assert_eq!(result.unwrap().len(),5);
 
         // List all tasks
-        let result: Result<Vec<TaskData>, String> = queue.list(vec![],None).await;
+        let result: Result<Vec<QueueData>, String> = queue.list(vec![],None).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
         assert_eq!(result.unwrap().len(),10);
 
