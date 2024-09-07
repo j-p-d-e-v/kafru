@@ -31,6 +31,7 @@ impl std::fmt::Display for QueueStatus {
 pub struct QueueData {
     pub id: Option<Thing>,
     pub name: Option<String>,
+    pub queue: Option<String>,
     pub handler: Option<String>,
     pub parameters: Option<HashMap<String,Value>>,
     pub status: Option<QueueStatus>,
@@ -45,6 +46,7 @@ impl  Default for QueueData {
             id: None,
             name: None,
             parameters: None,
+            queue: Some("default".to_string()),
             handler: None,
             status: None,
             message: None,
@@ -69,14 +71,23 @@ impl<'a> Queue<'a>{
         }
     }
 
-    pub async fn list(&self,status:Vec<String>, limit: Option<u64>) -> Result<Vec<QueueData>,String> {
+    pub async fn list(&self,status:Vec<String>, queue: Vec<String>, limit: Option<usize>) -> Result<Vec<QueueData>,String> {
         let mut bindings: HashMap<&str,Value> = HashMap::new();
         bindings.insert("table", Value::String(self.table.to_string()));
         let mut stmt = String::from("SELECT * FROM type::table($table)");
+        let mut stmt_where: Vec<&str> = Vec::new();
         if status.len() > 0 {
             let status: Vec<Value> = status.into_iter().map(|value| Value::String(value)).collect();
             bindings.insert("status", Value::Array(status));
-            stmt.push_str(" WHERE status IN $status");
+            stmt_where.push("status IN $status");
+        }
+        if queue.len() > 0 {            
+            let queue: Vec<Value> = queue.into_iter().map(|queue| Value::String(queue)).collect();
+            bindings.insert("queue", Value::Array(queue));
+            stmt_where.push("queue IN $queue");
+        }
+        if stmt_where.len() > 0 {
+            stmt.push_str(format!(" WHERE {}",stmt_where.join(" AND ")).as_str());
         }
         
         stmt.push_str(" ORDER BY date_created ASC");
@@ -167,6 +178,7 @@ impl<'a> Queue<'a>{
                     handler: if data.handler.is_none() {  record.handler } else { data.handler },
                     status: if data.status.is_none() {  record.status } else { data.status },
                     message: if data.message.is_none() {  record.message } else { data.message },
+                    queue: if data.queue.is_none() {  record.queue } else { data.queue },
                     date_created: if data.date_created.is_none() {  record.date_created } else { data.date_created },
                     date_modified: Some(Utc::now()),
                     ..Default::default()

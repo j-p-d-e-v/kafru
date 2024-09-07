@@ -1,8 +1,11 @@
 
 use serde_json::Value;
 use std::collections::HashMap;
-pub trait TaskHandler  {
-    fn run(&self, params: HashMap<String,Value>) -> Result<(),String> ;
+use async_trait::async_trait;
+
+#[async_trait]
+pub trait TaskHandler: Send {
+    async fn run(&self, params: HashMap<String,Value>) -> Result<(),String> ;
 }
 type TaskHandlerFactory = fn() -> Box<dyn TaskHandler>;
 
@@ -13,18 +16,25 @@ pub struct TaskRegistry {
 
 impl TaskRegistry {
 
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         Self {
             items: HashMap::new()
         }
     }
 
-    pub fn register(&mut self,key: String, f: TaskHandlerFactory) -> bool {
+    pub async fn register(&mut self,key: String, f: TaskHandlerFactory) -> bool {
         self.items.insert(key, f);
         true
     }
 
-    pub fn tasks(self) -> HashMap<String, TaskHandlerFactory> {
+    pub async fn get(&self,key: String) -> Result<TaskHandlerFactory,String> {
+        match self.items.get_key_value(&key) {
+            Some(item) => Ok(item.1.to_owned()),
+            None => Err(format!("{} not found in the task registry.",key))
+        }
+    }
+
+    pub async fn tasks(self) -> HashMap<String, TaskHandlerFactory> {
         self.items
     }
 }
