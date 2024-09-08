@@ -60,7 +60,7 @@ The task registry stores a collection of task structs that contain the logic to 
 
 ```rust
 use async_trait::async_trait;
-use crate::task::TaskHandler;
+use kafru::task::TaskHandler;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -85,7 +85,7 @@ impl TaskHandler for MySampleStruct {
 
 ```rust
 use async_trait::async_trait;
-use crate::task::{TaskHandler, TaskRegistry};
+use kafru::task::{TaskHandler, TaskRegistry};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -114,8 +114,8 @@ To execute tasks using both the worker (watcher) and the scheduler, follow these
 
 ```rust
 use std::sync::Arc;
-use crate::manager::Manager;
-use crate::task::TaskRegistry;
+use kafru::manager::Manager;
+use kafru::task::TaskRegistry;
 
 // Initialize the Manager struct.
 let mut manager: Manager = Manager::new().await;
