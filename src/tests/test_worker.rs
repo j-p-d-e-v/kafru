@@ -19,6 +19,7 @@ mod test_worker {
     use std::collections::HashMap;
     use serde_json::{Value, Number};
     use rand::{self, Rng};
+    use std::sync::Arc;
 
     pub struct MyTestStructA {
         message: String
@@ -69,8 +70,9 @@ mod test_worker {
                 ..Default::default()
             }).await;
         }
-        let worker  = Worker::new(task_registry,true).await;
-        let result = worker.watch(5, Some("default".to_string()), Some(5)).await;
+        let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
+        let worker  = Worker::new(true).await;
+        let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(5)).await;
         assert!(result.is_ok(),"{:?}",result.unwrap_err());
     }
 }

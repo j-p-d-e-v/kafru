@@ -6,33 +6,34 @@ use crate::queue::{
 };
 use std::sync::Arc;
 use tracing::{instrument, info, error};
+use tokio::runtime::{Builder, Runtime, RuntimeMetrics};
 
 #[derive(Debug)]
 pub struct Worker{
-    task_registry: Arc<TaskRegistry>,
     test_mode: bool
 }
 
 impl Worker{
-    pub async fn new(task_registry: TaskRegistry, test_mode: bool) -> Self {
+    pub async fn new(test_mode: bool) -> Self {
         Self {
-            task_registry: Arc::new(task_registry),
             test_mode
         }
     }
+
+
     #[instrument(skip_all)]
-    pub async fn watch(&self, num_threads: usize, queue_name: Option<String>, checks_delay: Option<u64>) -> Result<(),String> {
+    pub async fn watch(self, task_registry: Arc<TaskRegistry>, num_threads: usize, queue_name: Option<String>, checks_delay: Option<u64>) -> Result<(),String> {
         let checks_delay = checks_delay.unwrap_or(15);
         let queue_name = queue_name.unwrap_or(String::from("default"));
         info!("thread pool for {} has been created with {} number of threads",&queue_name, num_threads);
-        match tokio::runtime::Builder::new_multi_thread()
+        match Builder::new_multi_thread()
         .thread_name(queue_name.clone())
         .worker_threads(num_threads)
         .enable_all()
         .build() {
-            Ok(tr)=> {
+            Ok(runtime)=> {
                 loop {
-                    let busy_threads = tr.metrics().num_alive_tasks();
+                    let busy_threads = runtime.metrics().num_alive_tasks();
                     info!("thread status {}/{}",busy_threads,num_threads);
                     if busy_threads < num_threads {               
                         let idle_threads: usize = num_threads - busy_threads;     
@@ -40,12 +41,12 @@ impl Worker{
                         match queue.list(vec![QueueStatus::Waiting.to_string()], vec![queue_name.clone()], Some(idle_threads)).await {
                             Ok(records) => {
                                 if records.len() == 0 && self.test_mode && busy_threads == 0 {
-                                    tr.shutdown_background();
+                                    runtime.shutdown_background();
                                     break;
                                 }
                                 for record in records {
-                                    let registry: Arc<TaskRegistry>  = self.task_registry.clone();
-                                    tr.spawn(async move {
+                                    let registry: Arc<TaskRegistry>  = task_registry.clone();
+                                    runtime.spawn(async move {
                                         let queue: Queue = Queue::new().await;
                                         let record_name: String = record.name.unwrap();
                                         match queue.update(record.id.unwrap(),QueueData {
