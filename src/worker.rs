@@ -46,8 +46,10 @@ impl Worker{
                                     let registry: Arc<TaskRegistry>  = task_registry.clone();
                                     let rt_metrics: RuntimeMetrics = runtime.metrics();
                                     let metric: Metric = Metric::new().await;
+                                    let metric_name: String = queue_name.clone();
                                     runtime.spawn(async move {
                                         if let Err(error) = metric.create(MetricData {
+                                            name: Some(metric_name),
                                             kind: Some(MetricKind::Worker),
                                             num_alive_tasks: Some(rt_metrics.num_alive_tasks()),
                                             num_workers: Some(rt_metrics.num_workers()),

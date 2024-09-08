@@ -24,6 +24,7 @@ impl std::fmt::Display for MetricKind {
 pub struct MetricData {
     pub id: Option<Thing>,
     pub kind: Option<MetricKind>,
+    pub name: Option<String>,
     pub num_alive_tasks: Option<usize>,
     pub num_workers: Option<usize>,
     pub timestamp: Option<DateTime<Utc>>
@@ -34,6 +35,7 @@ impl  Default for MetricData {
         Self {
             id: None,
             kind: None,
+            name: None,
             num_alive_tasks: None,
             num_workers: None,
             timestamp: Some(Utc::now())
@@ -54,7 +56,7 @@ pub struct MetricListConditions {
 
 impl Default for MetricListConditions {
     fn default() -> Self {
-        Self {            
+        Self {       
             kind: None,
         }
     }
@@ -62,6 +64,7 @@ impl Default for MetricListConditions {
 
 impl<'a> Metric<'a>{
 
+    /// Initializes the metrics struct and sets up the database client.
     pub async fn new() -> Self {
         Self { 
             db: Db::new(None).await.unwrap(),
@@ -69,6 +72,7 @@ impl<'a> Metric<'a>{
         }
     }
 
+    /// Provides a list of available metrics and their information.
     pub async fn list(&self,conditions: MetricListConditions) -> Result<Vec<MetricData>,String> {
         let mut bindings: HashMap<&str,Value> = HashMap::new();
         bindings.insert("table", Value::String(self.table.to_string()));
@@ -98,14 +102,18 @@ impl<'a> Metric<'a>{
         }
     }
 
+    /// Creates or updates metric information, replacing existing metrics identified by their metric name.
     pub async fn create(&self, mut data: MetricData ) -> Result<MetricData,String> {
         let id: String = uuid::Uuid::new_v4().to_string();
         if data.kind.is_none() {
             return Err("metric kind is required".to_string());
         }
+        if data.name.is_none() {
+            return Err("name is required".to_string());
+        }
         data.timestamp = Some(Utc::now());
 
-        let _ = self.remove(data.clone().kind.unwrap()).await;
+        let _ = self.remove(data.clone().name.unwrap()).await;
         match self.db.client.create::<Option<MetricData>>((self.table,id)).content(data).await {
             Ok(result) => {
                 if let Some(record) = result {
@@ -117,10 +125,11 @@ impl<'a> Metric<'a>{
         }
     }
 
-    pub async fn remove(&self, kind: MetricKind) -> Result<bool,String> {
-        match self.db.client.query("DELETE FROM type::table($table) WHERE kind=$kind;")
+    /// Removes metric information identified by its name.
+    pub async fn remove(&self, name: String) -> Result<bool,String> {
+        match self.db.client.query("DELETE FROM type::table($table) WHERE name=$name;")
         .bind(("table",self.table))
-        .bind(("kind",kind)).await {
+        .bind(("name",name)).await {
             Ok(mut response) => {
                 match response.take::<Option<Value>>(0){
                     Ok(_) => {
@@ -132,16 +141,4 @@ impl<'a> Metric<'a>{
             Err(error) => Err(error.to_string())
         }
     }
-    pub async fn get(&self, id: Thing) -> Result<MetricData,String> {
-        match self.db.client.select::<Option<MetricData>>((self.table,id)).await {
-            Ok(data) => {
-                if let Some(record) = data {
-                    return Ok(record)
-                }
-                Err("unable to retrieve record".to_string())
-            }
-            Err(error) => Err(error.to_string())
-        }
-    }
-
 }

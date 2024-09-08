@@ -32,8 +32,10 @@ impl Scheduler{
                 loop {
                     let metric: Metric = Metric::new().await;
                     let rt_metrics: RuntimeMetrics = runtime.metrics();
+                    let metric_name: String = scheduler_name.clone();
                     runtime.spawn(async move {
                         if let Err(error) = metric.create(MetricData {
+                            name: Some(metric_name),
                             kind: Some(MetricKind::Scheduler),
                             num_alive_tasks: Some(rt_metrics.num_alive_tasks()),
                             num_workers: Some(rt_metrics.num_workers()),

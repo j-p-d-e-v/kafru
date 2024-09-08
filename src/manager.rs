@@ -11,6 +11,8 @@ pub struct Manager {
 }
 
 impl Manager {
+
+    /// Initializes the `Manager` struct, enabling the use of worker and scheduler functionalities for task management.
     pub async fn new() -> Self {
         tracing_subscriber::fmt().with_max_level(Level::DEBUG).with_line_number(true).init();
         Self {
@@ -18,6 +20,7 @@ impl Manager {
         }
     }
 
+    /// Launches the worker that polls the task queue and executes tasks.
     pub async fn worker(&mut self, queue_name: String, num_threads: usize, task_registry: Arc<TaskRegistry>, poll_interval: u64) -> Result<(),String> {
         self.join_set.spawn( async move {
             let worker  = Worker::new().await;
@@ -27,6 +30,7 @@ impl Manager {
         Ok(())
     }
 
+    /// Launches the scheduler that polls for scheduled tasks and pushes them to the queue for execution.
     pub async fn scheduler(&mut self, scheduler_name: String, poll_interval: u64) -> Result<(),String> {
         self.join_set.spawn( async move {
             let scheduler  = Scheduler::new().await;
@@ -35,7 +39,8 @@ impl Manager {
         Ok(())
     }
 
-    pub async fn join(self) -> Vec<()> {
+    /// Waits for the scheduler and worker to complete their tasks.
+    pub async fn wait(self) -> Vec<()> {
         self.join_set.join_all().await
     }
 

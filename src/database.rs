@@ -15,6 +15,19 @@ pub struct DbConnection {
 }
 
 impl Default for DbConnection {
+
+    /// ## Database Default Values
+    ///
+    /// The following environment variables are used for configuring the database:
+    ///
+    /// | Key                  | Description                                                                              | Default Value      |
+    /// |----------------------|------------------------------------------------------------------------------------------|--------------------|
+    /// | `KAFRU_DB_USERNAME`  | The database username.                                                                    | `kafru_admin`      |
+    /// | `KAFRU_DB_PASSWORD`  | The database password.                                                                    | `kafru_password`   |
+    /// | `KAFRU_DB_PORT`      | The port number of the database.                                                          | `4030`             |
+    /// | `KAFRU_DB_HOST`      | The database host or IP address.                                                          | `127.0.0.1`        |
+    /// | `KAFRU_DB_NAMESPACE` | The database namespace, useful for separating production and testing databases.            | `kafru`            |
+    /// | `KAFRU_DB_NAME`      | The name of the database.                                                                 | `kafru_db`         |
     fn default() -> Self {
         Self {
             username: env::var("KAFRU_DB_USERNAME").unwrap_or(String::from("kafry_admin")),
@@ -33,6 +46,11 @@ pub struct Db {
 }
 
 impl Db {
+    
+    /// Initializes and creates a new database client instance.
+    /// 
+    /// # Parameters
+    /// - `config`: *(Optional)* Database connection configuration. If not provided, the configuration can be automatically loaded from environment variables.
     pub async fn new(config: Option<DbConnection>) -> Result<Self,String> {
         let config: DbConnection = config.unwrap_or_default();
         let address: String = format!("{}:{}", config.host,config.port);

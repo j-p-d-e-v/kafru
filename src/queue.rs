@@ -28,6 +28,17 @@ impl std::fmt::Display for QueueStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+/// Attributes for filtering task queues:
+/// 
+/// - `id`: *(Optional)* Automatically assigned upon task creation.
+/// - `name`: The name of the task.
+/// - `queue`: The name of the queue; should match the queue being monitored by the worker. Default: queue
+/// - `parameters`: The parameters to pass to the task struct.
+/// - `handler`: The name of the handler registered in the task registry.
+/// - `status`: The status of the queue. Refer to the `QueueStatus` enum for possible values.
+/// - `message`: *(Optional)* Used for recording notes about the queue, such as error messages.
+/// - `date_created`: *(Optional)* The timestamp when the record was created. Automatically assigned.
+/// - `date_modified`: *(Optional)* The timestamp when the record was last modified. Automatically assigned.
 pub struct QueueData {
     pub id: Option<Thing>,
     pub name: Option<String>,
@@ -62,9 +73,12 @@ pub struct Queue<'a>{
     pub table: &'a str
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
-
+/// Attributes for filtering task queues:
+/// 
+/// - `status`: The list of queue statuses to filter by.
+/// - `names`: The queue name(s) to filter by.
+/// - `limit`: The number of items to retrieve.
 pub struct QueueListConditions {
     pub status: Option<Vec<String>>,
     pub queue: Option<Vec<String>>,
@@ -83,6 +97,7 @@ impl Default for QueueListConditions {
 
 impl<'a> Queue<'a>{
 
+    /// Initializes the `Queue` struct and Database Connection.
     pub async fn new() -> Self {
         Self { 
             db: Db::new(None).await.unwrap(),
@@ -90,6 +105,11 @@ impl<'a> Queue<'a>{
         }
     }
 
+
+    /// Lists all task queues.
+    ///
+    /// # Parameters
+    /// - `conditions`: Filter configuration used to retrieve specific task queues using `QueueListConditions` struct.
     pub async fn list(&self, conditions: QueueListConditions) -> Result<Vec<QueueData>,String> {
         let mut bindings: HashMap<&str,Value> = HashMap::new();
         bindings.insert("table", Value::String(self.table.to_string()));
@@ -129,6 +149,10 @@ impl<'a> Queue<'a>{
         }
     }
 
+    /// Pushes queue information, which will then be picked up by the worker for execution.
+    ///
+    /// # Parameters
+    /// - `data`: The queue data, provided as a `QueueData` struct.
     pub async fn push(&self, mut data: QueueData ) -> Result<QueueData,String> {
         let id: String = uuid::Uuid::new_v4().to_string();
         data.date_created = Some(Utc::now());
@@ -144,6 +168,10 @@ impl<'a> Queue<'a>{
         }
     }
 
+    /// Removes a queue record by its ID.
+    ///
+    /// # Parameters
+    /// - `id`: The ID of the queue record to remove
     pub async fn remove(&self, id: Thing ) -> Result<QueueData,String> {
         match self.db.client.delete::<Option<QueueData>>((self.table,id)).await {
             Ok(result) => {
@@ -155,7 +183,8 @@ impl<'a> Queue<'a>{
             Err(error) => Err(error.to_string())
         }
     }
-
+    
+    /// Removes all queue records.
     pub async fn purge(&self) -> Result<u64,String> {
         match self.db.client.query("
             SELECT count() as total FROM type::table($table) GROUP ALL;
@@ -176,6 +205,11 @@ impl<'a> Queue<'a>{
             Err(error) => Err(error.to_string())
         }
     }
+
+    /// Retrieves a queue record by its ID.
+    ///
+    /// # Parameters
+    /// - `id`: The ID of the queue record to retrieve.
     pub async fn get(&self, id: Thing) -> Result<QueueData,String> {
         match self.db.client.select::<Option<QueueData>>((self.table,id)).await {
             Ok(data) => {
@@ -187,7 +221,12 @@ impl<'a> Queue<'a>{
             Err(error) => Err(error.to_string())
         }
     }
-
+    
+    /// Updates information for a specific queue record.
+    ///
+    /// # Parameters
+    /// - `id`: The ID of the queue record to update.
+    /// - `data`: The updated queue data, provided as a `QueueData` struct.
     pub async fn update(&self, id: Thing, data: QueueData ) -> Result<QueueData,String> {
         match self.get(id.clone()).await  {
             Ok(record)=> {

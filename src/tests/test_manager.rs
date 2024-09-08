@@ -74,7 +74,7 @@ mod test_manager {
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
         let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15).await;
         let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5).await;
-        let _ = manager.join().await;
+        let _ = manager.wait().await;
     }
 
     
@@ -113,6 +113,6 @@ mod test_manager {
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
         let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15).await;
         let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5).await;
-        let _ = manager.join().await;
+        let _ = manager.wait().await;
     }
 }
