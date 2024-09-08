@@ -79,7 +79,7 @@ mod test_schedule {
         let result = schedule.purge().await;
         assert!(result.is_ok(),"{:?}",result.unwrap_err());
 
-        // List tasks by WAITING ONLY
+        // List schedules
         for i in 1..11 {
             let result: Result<ScheduleData, String> = schedule.create(ScheduleData {
                 name: Some(format!("{} - {}",i,Name().fake::<String>())),

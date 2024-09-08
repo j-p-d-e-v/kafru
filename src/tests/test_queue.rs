@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test_queue {
     use crate::tests::test_helper::configure_database_env;
-    use crate::queue::{Queue, QueueData, QueueStatus};
+    use crate::queue::{Queue, QueueData, QueueStatus, QueueListConditions};
     use fake::{
         Fake,
         faker::{
@@ -76,12 +76,17 @@ mod test_queue {
                 ..Default::default()
             }).await;
         }
-        let result: Result<Vec<QueueData>, String> = queue.list(vec!["Waiting".to_string()],vec!["myloopqueue".to_string()],Some(5)).await;
+        let result: Result<Vec<QueueData>, String> = queue.list(
+            QueueListConditions {
+                status: Some(vec!["Waiting".to_string()]),
+                queue: Some(vec!["myloopqueue".to_string()]),
+                limit: Some(5)
+            }).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
         assert_eq!(result.unwrap().len(),5);
         
         // List all tasks assert!(result.is_ok(),"{}",result.unwrap_err());
-        let result: Result<Vec<QueueData>, String> = queue.list(vec![],vec![],None).await;
+        let result: Result<Vec<QueueData>, String> = queue.list(QueueListConditions::default()).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
         assert_eq!(result.unwrap().len(),10);
 

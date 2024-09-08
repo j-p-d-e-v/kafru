@@ -2,6 +2,15 @@
 name = "kafru"
 version = "0.1.0"
 edition = "2021"
+authors = ["JP Mateo <jpmateo022@gmail.com>"]
+description = "kafru is a Python Celery-inspired queuing library for Rust, using cron for scheduling and SurrealDB for storing queues, metrics, and schedules."
+license = "MIT"
+repository = "https://github.com/j-p-d-e-v/kafru"
+keywords = ["queue", "task", "cron", "surrealdb", "scheduling"]
+categories = ["asynchronous", "database", "scheduler"]
+homepage = "https://github.com/j-p-d-e-v/kafru"
+documentation = "https://docs.rs/kafru"
+readme = "README.md"
 
 [dependencies]
 async-trait = "0.1.82"

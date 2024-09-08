@@ -71,7 +71,7 @@ mod test_worker {
             }).await;
         }
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
-        let worker  = Worker::new(true).await;
+        let worker  = Worker::new().await;
         let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(5)).await;
         assert!(result.is_ok(),"{:?}",result.unwrap_err());
     }

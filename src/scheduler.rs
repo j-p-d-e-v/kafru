@@ -3,16 +3,16 @@ use crate::schedule::{
 };
 use chrono::Utc;
 use tracing::{instrument, info, error};
-use tokio::runtime::{Builder, Runtime, RuntimeMetrics};
-use std::sync::Arc;
+use tokio::runtime::{Builder, RuntimeMetrics};
 use crate::queue::{
     Queue,
     QueueData,
     QueueStatus
 };
+use crate::metric::{Metric, MetricData, MetricKind};
 
 #[derive(Debug)]
-pub struct Scheduler{}
+pub struct Scheduler;
 
 impl Scheduler{
     pub async fn new() -> Self {
@@ -29,10 +29,19 @@ impl Scheduler{
         .enable_all()
         .build() {
             Ok(runtime)=> {
-                let arc_schedule: Arc<Schedule> = Arc::new(Schedule::new().await);
-                loop {    
-                    let schedule = arc_schedule.clone();
+                loop {
+                    let metric: Metric = Metric::new().await;
+                    let rt_metrics: RuntimeMetrics = runtime.metrics();
                     runtime.spawn(async move {
+                        if let Err(error) = metric.create(MetricData {
+                            kind: Some(MetricKind::Scheduler),
+                            num_alive_tasks: Some(rt_metrics.num_alive_tasks()),
+                            num_workers: Some(rt_metrics.num_workers()),
+                            ..Default::default()
+                        }).await {
+                            info!("scheduler metrics error: {}",error);
+                        }
+                        let schedule: Schedule = Schedule::new().await;
                         match schedule.list(ScheduleListConditions {
                             until_schedule: Some(Utc::now()),
                             start_schedule: Some(Utc::now()),
@@ -44,7 +53,6 @@ impl Scheduler{
                                 info!("got {} records",records.len());
                                 let queue: Queue = Queue::new().await;
                                 for record in records {
-                                    let schedule: Schedule = Schedule::new().await;
                                     let record_name: String = record.name.unwrap();
                                     let record_status: ScheduleStatus = record.status.unwrap();
                                     if let Err(error) = schedule.update(record.id.unwrap(),ScheduleData {
@@ -72,7 +80,7 @@ impl Scheduler{
                             }
                         }
                         drop(schedule);
-                    });
+                    }).await.unwrap();
                     info!("scheduler sleeping in {} second(s)",checks_delay);
                     tokio::time::sleep(std::time::Duration::from_secs(checks_delay)).await;
                 }

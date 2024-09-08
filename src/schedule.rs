@@ -98,7 +98,7 @@ impl<'a> Schedule<'a>{
     pub async fn new() -> Self {
         Self { 
             db: Db::new(None).await.unwrap(),
-            table: "kafru_schedule"
+            table: "kafru_schedules"
         }
     }
 

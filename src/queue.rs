@@ -62,6 +62,25 @@ pub struct Queue<'a>{
     pub table: &'a str
 }
 
+
+#[derive(Debug, Serialize, Deserialize)]
+
+pub struct QueueListConditions {
+    pub status: Option<Vec<String>>,
+    pub queue: Option<Vec<String>>,
+    pub limit: Option<usize>
+}
+
+impl Default for QueueListConditions {
+    fn default() -> Self {
+        Self {            
+            status: None,
+            queue: None,
+            limit: None
+        }
+    }
+}
+
 impl<'a> Queue<'a>{
 
     pub async fn new() -> Self {
@@ -71,17 +90,17 @@ impl<'a> Queue<'a>{
         }
     }
 
-    pub async fn list(&self,status:Vec<String>, queue: Vec<String>, limit: Option<usize>) -> Result<Vec<QueueData>,String> {
+    pub async fn list(&self, conditions: QueueListConditions) -> Result<Vec<QueueData>,String> {
         let mut bindings: HashMap<&str,Value> = HashMap::new();
         bindings.insert("table", Value::String(self.table.to_string()));
         let mut stmt = String::from("SELECT * FROM type::table($table)");
         let mut stmt_where: Vec<&str> = Vec::new();
-        if status.len() > 0 {
+        if let Some(status) = conditions.status {
             let status: Vec<Value> = status.into_iter().map(|value| Value::String(value)).collect();
             bindings.insert("status", Value::Array(status));
             stmt_where.push("status IN $status");
         }
-        if queue.len() > 0 {            
+        if let Some(queue) = conditions.queue {        
             let queue: Vec<Value> = queue.into_iter().map(|queue| Value::String(queue)).collect();
             bindings.insert("queue", Value::Array(queue));
             stmt_where.push("queue IN $queue");
@@ -92,8 +111,8 @@ impl<'a> Queue<'a>{
         
         stmt.push_str(" ORDER BY date_created ASC");
 
-        if let Some(value) = limit {
-            bindings.insert("limit", Value::Number(Number::from(value)));
+        if let Some(limit) = conditions.limit { 
+            bindings.insert("limit", Value::Number(Number::from(limit)));
             stmt.push_str(" LIMIT $limit");
         }
         match self.db.client.query(stmt)

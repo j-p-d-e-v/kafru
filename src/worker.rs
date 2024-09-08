@@ -2,25 +2,21 @@ use crate::task::TaskRegistry;
 use crate::queue::{
     Queue,
     QueueData,
-    QueueStatus
+    QueueStatus,
+    QueueListConditions
 };
 use std::sync::Arc;
 use tracing::{instrument, info, error};
-use tokio::runtime::{Builder, Runtime, RuntimeMetrics};
+use tokio::runtime::{Builder, RuntimeMetrics};
+use crate::metric::{Metric, MetricData, MetricKind};
 
 #[derive(Debug)]
-pub struct Worker{
-    test_mode: bool
-}
+pub struct Worker;
 
 impl Worker{
-    pub async fn new(test_mode: bool) -> Self {
-        Self {
-            test_mode
-        }
+    pub async fn new() -> Self {
+        Self
     }
-
-
     #[instrument(skip_all)]
     pub async fn watch(self, task_registry: Arc<TaskRegistry>, num_threads: usize, queue_name: Option<String>, checks_delay: Option<u64>) -> Result<(),String> {
         let checks_delay = checks_delay.unwrap_or(15);
@@ -35,18 +31,31 @@ impl Worker{
                 loop {
                     let busy_threads = runtime.metrics().num_alive_tasks();
                     info!("thread status {}/{}",busy_threads,num_threads);
+
                     if busy_threads < num_threads {               
-                        let idle_threads: usize = num_threads - busy_threads;     
+                        let idle_threads: usize = if busy_threads <= num_threads { num_threads - busy_threads } else { 0 };     
                         let queue: Queue = Queue::new().await;
-                        match queue.list(vec![QueueStatus::Waiting.to_string()], vec![queue_name.clone()], Some(idle_threads)).await {
+                        error!("idle_threads: {}",idle_threads);
+                        match queue.list(
+                            QueueListConditions {
+                                status: Some(vec![QueueStatus::Waiting.to_string()]),
+                                queue: Some(vec![queue_name.clone()]),
+                                limit: Some(idle_threads)
+                            }).await {
                             Ok(records) => {
-                                if records.len() == 0 && self.test_mode && busy_threads == 0 {
-                                    runtime.shutdown_background();
-                                    break;
-                                }
                                 for record in records {
                                     let registry: Arc<TaskRegistry>  = task_registry.clone();
+                                    let rt_metrics: RuntimeMetrics = runtime.metrics();
+                                    let metric: Metric = Metric::new().await;
                                     runtime.spawn(async move {
+                                        if let Err(error) = metric.create(MetricData {
+                                            kind: Some(MetricKind::Worker),
+                                            num_alive_tasks: Some(rt_metrics.num_alive_tasks()),
+                                            num_workers: Some(rt_metrics.num_workers()),
+                                            ..Default::default()
+                                        }).await {
+                                            info!("worker metrics error: {}",error);
+                                        }
                                         let queue: Queue = Queue::new().await;
                                         let record_name: String = record.name.unwrap();
                                         match queue.update(record.id.unwrap(),QueueData {
@@ -100,7 +109,6 @@ impl Worker{
                     info!("sleeping in {} second(s)",checks_delay);
                     tokio::time::sleep(std::time::Duration::from_secs(checks_delay)).await;
                 }
-                Ok(())
             }
             Err(error) => {
                 Err(error.to_string())
