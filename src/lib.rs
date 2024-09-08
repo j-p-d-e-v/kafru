@@ -8,4 +8,3 @@ pub mod cron_schedule;
 pub mod scheduler;
 pub mod metric;
 pub mod manager;
-use serde::{Serialize, Deserialize};
