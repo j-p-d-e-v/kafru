@@ -2,6 +2,8 @@
 
 **kafru** is a Rust crate inspired by Python's Celery, designed for efficient task queue management. The name "kafru" is inspired by the "Kafra" system from the popular game Ragnarok Online. It utilizes cron for scheduling tasks and integrates with SurrealDB to manage queues, metrics, and schedules.
 
+![Cute cat GIF](./kafru-overview.gif)
+
 ## Features
 
 - **Task Registry**: Manage and organize a collection of structs designed for task execution.
