@@ -20,6 +20,12 @@ impl Scheduler{
     }
 
     #[instrument(skip_all)]
+    /// Initiates monitoring of schedules and pushes tasks to the queue for execution.
+    /// 
+    /// # Parameters
+    ///
+    /// - `scheduler_name`: (Optional) The name of the scheduler to watch. If provided, the function will specifically monitor the named scheduler. Default: default
+    /// - `poll_interval`: (Optional) The interval, in seconds, at which to poll the scheduler for updates or new schedule. If `None`, the function will use a default polling interval. The interval determines how frequently the scheduler is checked for changes or new schedule. Default: 60 seconds
     pub async fn watch(self, scheduler_name: Option<String>, poll_interval: Option<u64>) -> Result<(),String> {
         let poll_interval = poll_interval.unwrap_or(60);
         let scheduler_name = scheduler_name.unwrap_or(String::from("default"));

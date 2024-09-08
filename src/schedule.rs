@@ -22,6 +22,23 @@ impl std::fmt::Display for ScheduleStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// The `ScheduleData` struct holds information about a schedule, including its configuration, status, and timing details.
+///
+/// # Fields
+/// 
+/// - `id`: (Optional) A unique identifier for the schedule. This can be used to reference or manage the schedule. Automatically assigned during creation.
+/// - `name`: (Optional) The name of the schedule. This is used for identification and organization.
+/// - `queue`: (Optional) The name of the queue to which this schedule's tasks will be added. This should match a queue that is being monitored by a worker.
+/// - `cron_expression`: (Optional) A `CronSchedule` struct representing the cron expression used to determine when the schedule should run.
+/// - `handler`: (Optional) The name of the handler registered in the task registry that will process the tasks. This should correspond to a registered task handler.
+/// - `parameters`: (Optional) A map of parameters (`HashMap<String, Value>`) to pass to the task handler. These parameters can customize the behavior of the task.
+/// - `status`: (Optional) The status of the schedule, represented by the `ScheduleStatus` enum. This indicates whether the schedule is enabled or dsiabled. Default: Disabled
+/// - `one_time`: A boolean flag indicating whether the schedule is a one-time event or recurring. If `true`, the schedule will only run once.
+/// - `start_schedule`: (Optional) The start date and time of the schedule, represented as a `DateTime<Utc>`. This indicates when the schedule should begin execution.
+/// - `until_schedule`: (Optional) The end date and time of the schedule, represented as a `DateTime<Utc>`. This specifies until when the schedule should continue executing.
+/// - `next_schedule`: (Optional) The next date and time when the schedule is expected to run, represented as a `DateTime<Utc>`. This is useful for determining the upcoming execution time.
+/// - `date_created`: (Optional) The timestamp when the schedule was created, represented as a `DateTime<Utc>`. This is used for tracking the creation time of the schedule.
+/// - `date_modified`: (Optional) The timestamp when the schedule was last modified, represented as a `DateTime<Utc>`. This is useful for tracking changes made to the schedule.
 pub struct ScheduleData {
     pub id: Option<Thing>,
     pub name: Option<String>,
@@ -65,6 +82,19 @@ pub struct Schedule<'a>{
 }
 
 #[derive(Debug, Clone)]
+/// Represents the conditions used for filtering a list of schedules.
+///
+/// # Fields
+///
+/// - `status`: (Optional) A vector of schedule statuses to filter by. Only schedules matching one of these statuses will be included in the result.
+/// - `queue`: (Optional) A vector of queue names to filter by. Only schedules associated with one of these queues will be included in the result.
+/// - `handler`: (Optional) A vector of handler names to filter by. Only schedules using one of these handlers will be included in the result.
+/// - `name`: (Optional) A vector of schedule names to filter by. Only schedules with names matching one of these values will be included in the result.
+/// - `start_schedule`: (Optional) A start date and time (`DateTime<Utc>`) to filter by. Only schedules that start on or after this date and time will be included in the result.
+/// - `until_schedule`: (Optional) An end date and time (`DateTime<Utc>`) to filter by. Only schedules that end on or before this date and time will be included in the result.
+/// - `one_time`: (Optional) A boolean flag indicating whether to filter by one-time schedules only. If `true`, only one-time schedules will be included in the result.
+/// - `upcoming`: (Optional) A boolean flag indicating whether to filter by upcoming schedules only. If `true`, only schedules that are upcoming (i.e., with a `next_schedule` in the future) will be included in the result.
+/// - `limit`: (Optional) An optional integer specifying the maximum number of schedules to return. If `Some(n)` is provided, the result will be limited to `n` schedules.
 pub struct ScheduleListConditions {
     pub status: Option<Vec<String>>,
     pub queue: Option<Vec<String>>,
