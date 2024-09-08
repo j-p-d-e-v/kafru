@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1.82"
 chrono = "0.4.38"
+cron = "0.12.1"
 fake = "2.9.2"
 futures = "0.3.30"
 rand = "0.8.5"
