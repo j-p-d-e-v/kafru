@@ -9,9 +9,3 @@ pub mod scheduler;
 pub mod metric;
 pub mod manager;
 use serde::{Serialize, Deserialize};
-
-#[derive(Debug,Serialize,Deserialize)]
-pub enum Command {
-    ShutdownWorker,
-    ShutdownScheduler
-}
