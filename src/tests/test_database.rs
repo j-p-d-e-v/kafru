@@ -5,12 +5,12 @@ mod test_database {
 
     #[tokio::test]
     async fn test_connection_using_env(){
-        env::set_var("KAFRU_USERNAME","test".to_string());
-        env::set_var("KAFRU_PASSWORD","test".to_string());
-        env::set_var("KAFRU_PORT","4030".to_string());
-        env::set_var("KAFRU_HOST","127.0.0.1".to_string());
-        env::set_var("KAFRU_NAMESPACE","kafru_dev".to_string());
-        env::set_var("KAFRU_DB","kafru".to_string());
+        env::set_var("KAFRU_DB_USERNAME","test".to_string());
+        env::set_var("KAFRU_DB_PASSWORD","test".to_string());
+        env::set_var("KAFRU_DB_PORT","4030".to_string());
+        env::set_var("KAFRU_DB_HOST","127.0.0.1".to_string());
+        env::set_var("KAFRU_DB_NAMESPACE","kafru_dev".to_string());
+        env::set_var("KAFRU_DB_NAME","kafru".to_string());
         let result: Result<Db, String> = Db::new(None).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
     }

@@ -20,8 +20,8 @@ impl Scheduler{
     }
 
     #[instrument(skip_all)]
-    pub async fn watch(self, scheduler_name: Option<String>, checks_delay: Option<u64>) -> Result<(),String> {
-        let checks_delay = checks_delay.unwrap_or(60);
+    pub async fn watch(self, scheduler_name: Option<String>, poll_interval: Option<u64>) -> Result<(),String> {
+        let poll_interval = poll_interval.unwrap_or(60);
         let scheduler_name = scheduler_name.unwrap_or(String::from("default"));
         match Builder::new_multi_thread()
         .thread_name(scheduler_name.clone())
@@ -81,8 +81,8 @@ impl Scheduler{
                         }
                         drop(schedule);
                     }).await.unwrap();
-                    info!("scheduler sleeping in {} second(s)",checks_delay);
-                    tokio::time::sleep(std::time::Duration::from_secs(checks_delay)).await;
+                    info!("scheduler sleeping in {} second(s)",poll_interval);
+                    tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
                 }
             }
             Err(error) => {

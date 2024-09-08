@@ -17,12 +17,12 @@ pub struct DbConnection {
 impl Default for DbConnection {
     fn default() -> Self {
         Self {
-            username: env::var("KAFRU_USERNAME").unwrap_or(String::new()),
-            password: env::var("KAFRU_PASSWORD").unwrap_or(String::new()),
-            port: env::var("KAFRU_PORT").unwrap_or("4030".to_string()).parse::<u16>().unwrap(),
-            host: env::var("KAFRU_HOST").unwrap_or(String::new()),
-            namespace: env::var("KAFRU_NAMESPACE").unwrap_or(String::new()),
-            database: env::var("KAFRU_DB").unwrap_or(String::new()),
+            username: env::var("KAFRU_DB_USERNAME").unwrap_or(String::from("kafry_admin")),
+            password: env::var("KAFRU_DB_PASSWORD").unwrap_or(String::from("kafru_password")),
+            port: env::var("KAFRU_DB_PORT").unwrap_or("4030".to_string()).parse::<u16>().unwrap(),
+            host: env::var("KAFRU_DB_HOST").unwrap_or(String::from("127.0.0.1")),
+            namespace: env::var("KAFRU_DB_NAMESPACE").unwrap_or(String::from("karfru")),
+            database: env::var("KAFRU_DB_NAME").unwrap_or(String::from("kafru_db")),
         }
     }
 }

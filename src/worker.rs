@@ -18,8 +18,8 @@ impl Worker{
         Self
     }
     #[instrument(skip_all)]
-    pub async fn watch(self, task_registry: Arc<TaskRegistry>, num_threads: usize, queue_name: Option<String>, checks_delay: Option<u64>) -> Result<(),String> {
-        let checks_delay = checks_delay.unwrap_or(15);
+    pub async fn watch(self, task_registry: Arc<TaskRegistry>, num_threads: usize, queue_name: Option<String>, poll_interval: Option<u64>) -> Result<(),String> {
+        let poll_interval = poll_interval.unwrap_or(15);
         let queue_name = queue_name.unwrap_or(String::from("default"));
         info!("thread pool for {} has been created with {} number of threads",&queue_name, num_threads);
         match Builder::new_multi_thread()
@@ -35,7 +35,6 @@ impl Worker{
                     if busy_threads < num_threads {               
                         let idle_threads: usize = if busy_threads <= num_threads { num_threads - busy_threads } else { 0 };     
                         let queue: Queue = Queue::new().await;
-                        error!("idle_threads: {}",idle_threads);
                         match queue.list(
                             QueueListConditions {
                                 status: Some(vec![QueueStatus::Waiting.to_string()]),
@@ -106,8 +105,8 @@ impl Worker{
                             }
                         }
                     }
-                    info!("sleeping in {} second(s)",checks_delay);
-                    tokio::time::sleep(std::time::Duration::from_secs(checks_delay)).await;
+                    info!("sleeping in {} second(s)",poll_interval);
+                    tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
                 }
             }
             Err(error) => {

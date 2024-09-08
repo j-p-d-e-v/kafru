@@ -4,10 +4,13 @@
 
 ## Features
 
-- **Task Queueing**: Manage and execute tasks asynchronously with support for complex workflows.
-- **Cron Scheduling**: Schedule tasks using cron expressions for recurring or one-time jobs.
-- **SurrealDB Integration**: Store and manage task queues, schedules, and performance metrics using SurrealDB.
-- **Metrics Tracking**: Track the number of tasks in the queue and the number of threads.
+- **Task Registry**: Manage and organize a collection of structs designed for task execution.
+- **Scheduler**: Utilize cron-based scheduling to define when tasks are pushed to the queue, with options to set start and end times.
+- **Queue**: Maintain a list of tasks awaiting execution.
+- **Worker**: Execute tasks from the queue, referencing the task registry to determine the appropriate struct for each task.
+- **SurrealDB Integration**: Store and manage scheduling details, queue information, and metrics using SurrealDB.
+
+---
 
 ## Installation
 
@@ -17,14 +20,143 @@ cargo add karfu
 
 ## Usage
 
+### 1. Run SurrealDB
 
-## Metrics
+For testing, you can start SurrealDB using an in-memory database:
 
-**kafru** provides the following metrics:
-- **Number of Tasks in the Queue**: Current count of tasks waiting to be executed.
-- **Number of Threads**: Number of active threads handling tasks.
+```bash
+surreal start -u kafru_admin -p kafru_password -b 0.0.0.0:4030 --allow-all memory
+```
 
-## Documentation
+For running SurrealDB in file mode, refer to the [SurrealDB documentation](https://surrealdb.com/docs/surrealdb/introduction/start).
+
+---
+
+### 2. Environment Variables
+
+The following environment variables can be used to configure the database:
+
+| Key                  | Description                                                   | Default Value      |
+|----------------------|---------------------------------------------------------------|--------------------|
+| `KAFRU_DB_USERNAME`  | The database username.                                         | `kafru_admin`      |
+| `KAFRU_DB_PASSWORD`  | The database password.                                         | `kafru_password`   |
+| `KAFRU_DB_PORT`      | The port number of the database.                               | `4030`             |
+| `KAFRU_DB_HOST`      | The database host or IP address.                               | `127.0.0.1`        |
+| `KAFRU_DB_NAMESPACE` | The database namespace, useful for separating production and testing databases. | `kafru`            |
+| `KAFRU_DB_NAME`      | The database name.                                             | `kafru_db`         |
+
+---
+
+## Registering Task Structs to the Task Registry
+
+The task registry stores a collection of task structs that contain the logic to be executed.
+
+### 3. Create a Task Struct
+
+- Your struct must implement the `TaskHandler` trait.
+- Define the code to execute within the `async fn run(&self, _params: std::collections::HashMap<String, Value>) -> Result<(), String>` method.
+
+#### Sample
+
+```rust
+use async_trait::async_trait;
+use crate::task::TaskHandler;
+use serde_json::Value;
+use std::collections::HashMap;
+
+pub struct MySampleStruct;
+
+#[async_trait]
+impl TaskHandler for MySampleStruct {
+    async fn run(&self, _params: HashMap<String, Value>) -> Result<(), String> {
+        let x = 1; // Replace this with your logic.
+        let total = x + 1;
+        // Perform your task logic here.
+        Ok(())
+    }
+}
+```
+
+### 4. Register the Struct to the Task Registry
+
+- After defining the task struct, register it in the task registry by providing a name for the struct.
+
+#### Sample
+
+```rust
+use async_trait::async_trait;
+use crate::task::{TaskHandler, TaskRegistry};
+use serde_json::Value;
+use std::collections::HashMap;
+
+pub struct MySampleStruct;
+
+#[async_trait]
+impl TaskHandler for MySampleStruct {
+    async fn run(&self, _params: HashMap<String, Value>) -> Result<(), String> {
+        // Task logic here.
+        Ok(())
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let mut task_registry: TaskRegistry = TaskRegistry::new().await;
+    task_registry.register("mytesthandler".to_string(), || Box::new(MySampleStruct)).await;
+}
+```
+
+---
+
+### 5. Running the Worker and Scheduler via the Manager
+
+To execute tasks using both the worker (watcher) and the scheduler, follow these steps:
+
+```rust
+use std::sync::Arc;
+use crate::manager::Manager;
+use crate::task::TaskRegistry;
+
+// Initialize the Manager struct.
+let mut manager: Manager = Manager::new().await;
+
+// Initialize the Task Registry struct and register the task.
+let mut task_registry: TaskRegistry = TaskRegistry::new().await;
+task_registry.register("mytesthandler".to_string(), || {
+    Box::new(MySampleStruct {
+        message: "Hello World".to_string(),
+    })
+}).await;
+
+// Share the task_registry using Arc for thread safety.
+let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
+
+// Run the Worker, specifying the queue name, number of threads, the task registry, and task poll interval (in seconds).
+let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15).await;
+
+// (Optional) Run the Scheduler by specifying the scheduler name and interval (in seconds).
+let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5).await;
+
+// Optionally, wait for both the worker and scheduler to finish. This will prevent the function from exiting prematurely.
+let _ = manager.join().await;
+```
+
+---
+
+### Explanation
+
+- **Task Registration**: Registers a task struct (`MySampleStruct`) in the task registry.
+- **Task Registry**: Shared using `Arc` to enable safe concurrent access in a multi-threaded environment.
+- **Worker**: Runs tasks from the queue, controlled by parameters such as:
+  - `queue_name`: Name of the queue to pull tasks from.
+  - `num_threads`: Number of threads to handle task execution.
+  - `task_registry`: Registry that contains the task structs.
+  - `poll_interval`: Polling interval (in seconds) to check for new tasks.
+- **Scheduler**: (Optional) Runs scheduled tasks at specified intervals, similar to cron jobs.
+- **Join**: Ensures that both the worker and scheduler keep running without the program exiting prematurely.
+
+
+## Code Documentation
 
 For detailed documentation, visit [docs.rs/kafru](https://docs.rs/kafru).
 
