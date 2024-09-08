@@ -138,7 +138,7 @@ let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15).awai
 let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5).await;
 
 // Optionally, wait for both the worker and scheduler to finish. This will prevent the function from exiting prematurely.
-let _ = manager.join().await;
+let _ = manager.wait().await;
 ```
 
 ---
