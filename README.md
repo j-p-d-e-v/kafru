@@ -14,10 +14,15 @@ This library offers robust background task execution with parallel processing th
 - **Worker**: Execute tasks from the queue, referencing the task registry to determine the appropriate struct for each task.
 - **SurrealDB Integration**: Store and manage scheduling details, queue information, and metrics using SurrealDB.
 
+## TODO
+- [ ] Scalability
+- [ ] Local TimeZone Support
+- [ ] Send commands to workers such as pause, shutdown, and etc...
+
 ## Installation
 
 ```
-cargo add karfu
+cargo add kafru
 ```
 
 ## Usage
