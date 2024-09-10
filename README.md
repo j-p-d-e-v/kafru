@@ -16,7 +16,6 @@ This library offers robust background task execution with parallel processing th
 
 ## TODO
 - [ ] Scalability
-- [ ] Local TimeZone Support
 - [ ] Send commands to workers such as pause, shutdown, and etc...
 
 ## Installation
