@@ -16,7 +16,7 @@ This library offers robust background task execution with parallel processing th
 
 ## TODO
 - [ ] Scalability
-- [ ] Send commands to workers such as pause, shutdown, and etc...
+- [ ] Use crossbeam mpsc for metrics.
 
 ## Installation
 

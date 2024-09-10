@@ -9,21 +9,28 @@ use crate::queue::{
     QueueData,
     QueueStatus
 };
+use crate::Command;
 use crate::metric::{Metric, MetricData, MetricKind};
 
-#[derive(Debug)]
-pub struct Scheduler;
+#[derive(Debug, Clone)]
+pub struct Scheduler {
+    rx: Receiver<Command>
+}
+use crossbeam::channel::Receiver;
 
 impl Scheduler{
-    pub async fn new() -> Self {
-        Self {}
+    pub async fn new(rx: Receiver<Command>) -> Self {
+        Self {
+            rx
+        }
     }
 
     #[instrument(skip_all)]
     /// Initiates monitoring of schedules and pushes tasks to the queue for execution.
     /// 
     /// # Parameters
-    ///
+    /// 
+    /// - `rx`: a channel crossbeam channel ```Receiver```.
     /// - `scheduler_name`: (Optional) The name of the scheduler to watch. If provided, the function will specifically monitor the named scheduler. Default: default
     /// - `poll_interval`: (Optional) The interval, in seconds, at which to poll the scheduler for updates or new schedule. If `None`, the function will use a default polling interval. The interval determines how frequently the scheduler is checked for changes or new schedule. Default: 60 seconds
     pub async fn watch(self, scheduler_name: Option<String>, poll_interval: Option<u64>) -> Result<(),String> {
@@ -36,6 +43,48 @@ impl Scheduler{
         .build() {
             Ok(runtime)=> {
                 loop {
+                    let mut received_command: Option<Command> = None;
+                    loop {
+                        if let Ok(recv) = self.rx.try_recv() {
+                            match recv {
+                                Command::SchedulerResume => {
+                                    info!("resumed scheduler {}",scheduler_name);
+                                    break;
+                                },
+                                Command::SchedulerPause => {
+                                    info!("paused scheduler {}",scheduler_name);
+                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                },
+                                _ => { 
+                                   received_command = Some(recv);
+                                   break;
+                                }
+                            }
+                        }
+                        else {
+                            break;
+                        }
+                    }
+                    if let Some(recv) = received_command {
+                        match recv {
+                            Command::SchedulerForceShutdown => {
+                                info!("forced shutdown scheduler {}",scheduler_name);
+                                runtime.shutdown_background();
+                                break;
+                            }
+                            Command::SchedulerGracefulShutdown => {
+                                loop {
+                                    if runtime.metrics().num_alive_tasks() == 0 {
+                                        info!("graceful shutdown scheduler {}",scheduler_name);
+                                        break;
+                                    }
+                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
                     let metric: Metric = Metric::new().await;
                     let rt_metrics: RuntimeMetrics = runtime.metrics();
                     let metric_name: String = scheduler_name.clone();
@@ -92,6 +141,7 @@ impl Scheduler{
                     info!("scheduler sleeping in {} second(s)",poll_interval);
                     tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
                 }
+                Ok(())
             }
             Err(error) => {
                 Err(error.to_string())

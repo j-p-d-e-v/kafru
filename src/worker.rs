@@ -9,22 +9,33 @@ use std::sync::Arc;
 use tracing::{instrument, info, error};
 use tokio::runtime::{Builder, RuntimeMetrics};
 use crate::metric::{Metric, MetricData, MetricKind};
+use crossbeam::channel::Receiver;
+use crate::Command;
+
 
 /// A struct representing a worker that processes tasks from a queue.
 ///
 /// The `Worker` struct manages the execution of tasks by periodically polling a queue and executing tasks
 /// with available worker threads.
 #[derive(Debug)]
-pub struct Worker;
+pub struct Worker {
+    rx: Receiver<Command>
+}
 
 impl Worker {
     /// Creates a new instance of the `Worker`.
     ///
+    /// # Parameters
+    /// 
+    /// - `rx`: a channel crossbeam channel ```Receiver```.
+    /// 
     /// # Returns
     /// 
     /// Returns a `Worker` instance.
-    pub async fn new() -> Self {
-        Self
+    pub async fn new(rx: Receiver<Command>) -> Self {
+        Self {
+            rx
+        }
     }
 
     /// Starts watching the task queue and processes tasks.
@@ -59,6 +70,48 @@ impl Worker {
                 loop {
                     let busy_threads = runtime.metrics().num_alive_tasks();
                     info!("Thread status {}/{}", busy_threads, num_threads);
+                    
+                    let mut received_command: Option<Command> = None;
+                    loop {
+                        if let Ok(recv) = self.rx.try_recv() {
+                            match recv {
+                                Command::WorkerResume => {
+                                    info!("resumed worker {}",queue_name);
+                                    break;
+                                },
+                                Command::WorkerPause => {
+                                    info!("paused worker {}",queue_name);
+                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                },
+                                _ => { 
+                                   received_command = Some(recv);
+                                   break;
+                                }
+                            }
+                        }
+                        else {
+                            break;
+                        }
+                    }
+                    if let Some(recv) = received_command {
+                        match recv {
+                            Command::WorkerForceShutdown => {
+                                info!("forced shutdown worker {}",queue_name);
+                                runtime.shutdown_background();
+                                break;
+                            }
+                            Command::WorkerGracefulShutdown => {
+                                loop {
+                                    if runtime.metrics().num_alive_tasks() == 0 {
+                                        info!("graceful shutdown worker {}",queue_name);
+                                        break;
+                                    }
+                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
 
                     if busy_threads < num_threads {
                         let idle_threads: usize = if busy_threads <= num_threads { num_threads - busy_threads } else { 0 };
@@ -144,6 +197,7 @@ impl Worker {
                     info!("Sleeping for {} second(s)", poll_interval);
                     tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
                 }
+                Ok(())
             }
             Err(error) => {
                 Err(error.to_string())

@@ -7,3 +7,4 @@ pub mod test_cron_schedule;
 pub mod test_schedule;
 pub mod test_scheduler;
 pub mod test_manager;
+pub mod test_command;

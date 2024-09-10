@@ -20,6 +20,8 @@ mod test_worker {
     use serde_json::{Value, Number};
     use rand::{self, Rng};
     use std::sync::Arc;
+    use crate::Command;
+    use crossbeam::channel::bounded;
 
     pub struct MyTestStructA {
         message: String
@@ -71,8 +73,22 @@ mod test_worker {
             }).await;
         }
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
-        let worker  = Worker::new().await;
-        let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(5)).await;
-        assert!(result.is_ok(),"{:?}",result.unwrap_err());
+        let  (tx, rx) = bounded::<Command>(1);
+        let task = tokio::spawn(async move {
+            let worker  = Worker::new(rx.clone()).await;
+            let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(2)).await;
+            assert!(result.is_ok(),"{:?}",result.unwrap_err());
+        });
+        
+        for command in [
+            Command::WorkerPause,
+            Command::WorkerResume,
+            Command::WorkerForceShutdown
+        ] {        
+            let result = tx.send(command);
+            assert!(result.is_ok(),"{}",result.unwrap_err());
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        }
+        task.await.unwrap();
     }
 }

@@ -1,7 +1,7 @@
 
 
 #[cfg(test)]
-mod test_worker {
+mod test_command {
     use crate::tests::test_helper::configure_database_env;
     use crate::schedule::{Schedule, ScheduleData, ScheduleStatus};
     use crate::scheduler::Scheduler;
@@ -30,6 +30,7 @@ mod test_worker {
         let result: Result<u64, String> = schedule.purge().await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
         
+
         //Create sample schedules
         for i in 1..11 {
             let result: Result<ScheduleData, String> = schedule.create(ScheduleData {
@@ -56,10 +57,10 @@ mod test_worker {
             assert!(result.is_ok(),"{}",result.unwrap_err());
         }
         let  (tx, rx) = bounded::<Command>(1);
-        let scheduler  = Scheduler::new(rx).await;
-        let task = tokio::spawn(async {
-            let result = scheduler.watch(Some("kafru_test_scheduler".to_string()), Some(15)).await;
-            assert!(result.is_ok(),"{:?}",result.unwrap_err());
+        let scheduler  = Scheduler::new(rx.clone()).await;
+        let task = tokio::task::spawn(async {
+            let result = scheduler.watch(Some("kafru_test_scheduler".to_string()), Some(2)).await;
+            assert!(result.is_ok(),"{:?}",result.unwrap_err());    
         });
         for command in [
             Command::SchedulerPause,

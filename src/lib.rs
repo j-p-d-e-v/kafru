@@ -27,3 +27,24 @@ pub mod manager;
 
 // Unit and integration test cases for the modules.
 pub mod tests;
+
+
+/// The available commands that can be send to scheduler and worker.
+pub enum Command {
+    /// Resumes the paused scheduler.
+    SchedulerResume,
+    /// Suspend/Pause the scheduler.
+    SchedulerPause,
+    /// Force shutdown the scheduler, it will not wait for the execution to complete.
+    SchedulerForceShutdown,
+    /// Force shutdown the scheduler, it will wait for the execution to complete.
+    SchedulerGracefulShutdown,
+    /// Resumes the paused worker/queue.
+    WorkerResume,
+    /// Suspend/Pause the worker/queue.
+    WorkerPause,
+    /// Force shutdown the worker/queue, it will not wait for the execution to complete.
+    WorkerForceShutdown,
+    /// Force shutdown the worker/queue, it will wait for the execution to complete.
+    WorkerGracefulShutdown
+}

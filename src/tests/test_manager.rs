@@ -18,6 +18,8 @@ mod test_manager {
     use crate::task::{ TaskHandler, TaskRegistry };
     use rand::{self, Rng};
     use std::sync::Arc;
+    use crossbeam::channel::bounded;
+    use crate::Command;
 
     pub struct MyTestStructA {
         message: String
@@ -44,7 +46,6 @@ mod test_manager {
         configure_database_env();
 
         let schedule: Schedule = Schedule::new().await;
-        let mut manager: Manager = Manager::new().await;
 
         // Purge records
         let result = schedule.purge().await;
@@ -69,50 +70,41 @@ mod test_manager {
             }).await;
             assert!(result.is_ok(),"{}",result.unwrap_err());
         }
+        let mut manager = Manager::new().await;
         let mut task_registry: TaskRegistry = TaskRegistry::new().await;
         task_registry.register("mytesthandler".to_string(), || Box::new(MyTestStructA { message: "Hello World".to_string() })).await;
-        let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
-        let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15).await;
-        let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5).await;
-        let _ = manager.wait().await;
-    }
+        let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);        
+        let  (scheduler_tx, scheduler_rx) = bounded::<Command>(1);
+        let  (worker_tx, worker_rx) = bounded::<Command>(1);
+        let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15,worker_rx).await;
+        let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5,scheduler_rx).await;
 
-    
-    #[tokio::test]
-    async fn test_advance(){
-        configure_database_env();
-
-        let schedule: Schedule = Schedule::new().await;
-        let mut manager: Manager = Manager::new().await;
-
-        // Purge records
-        let result = schedule.purge().await;
-        assert!(result.is_ok(),"{:?}",result.unwrap_err());
-
-        //Create sample schedules
-        for i in 1..11 {
-            let result: Result<ScheduleData, String> = schedule.create(ScheduleData {
-                name: Some(format!("{} - {}",i,Name().fake::<String>())),
-                queue: Some("default".to_string()),
-                cron_expression: Some(CronSchedule::new().set_minute(format!("*/{}",i))),
-                handler:Some("mytesthandler".to_string()),
-                start_schedule: Utc::now().checked_add_days(Days::new(1)),
-                until_schedule: Utc::now().checked_add_days(Days::new(3)),
-                one_time: if i % 2 == 0 { true } else { false },
-                status: Some(ScheduleStatus::Enabled),
-                parameters: Some(HashMap::from([
-                    ( "schedule1".to_string(), Value::String(Sentence( Range {start: 1, end: 5 }).fake::<String>()) ),
-                    ( "schedule2".to_string(), Value::Number(Number::from(123)) )
-                ])),
-                ..Default::default()
-            }).await;
+        for command in [
+            Command::SchedulerPause,
+            Command::SchedulerResume,
+            Command::SchedulerForceShutdown
+        ] {        
+            let result = manager.send_command(command, scheduler_tx.clone()).await;
             assert!(result.is_ok(),"{}",result.unwrap_err());
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         }
-        let mut task_registry: TaskRegistry = TaskRegistry::new().await;
-        task_registry.register("mytesthandler".to_string(), || Box::new(MyTestStructA { message: "Hello World".to_string() })).await;
-        let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
-        let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15).await;
-        let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5).await;
-        let _ = manager.wait().await;
+        for command in [
+            Command::SchedulerPause,
+            Command::SchedulerResume,
+            Command::SchedulerForceShutdown
+        ] {        
+            let result = manager.send_command(command, scheduler_tx.clone()).await;
+            assert!(result.is_ok(),"{}",result.unwrap_err());
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        }
+        for command in [
+            Command::WorkerPause,
+            Command::WorkerResume,
+            Command::WorkerForceShutdown
+        ] {        
+            let result = worker_tx.send(command);
+            assert!(result.is_ok(),"{}",result.unwrap_err());
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        }
     }
 }
