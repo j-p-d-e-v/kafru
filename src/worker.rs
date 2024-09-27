@@ -11,6 +11,7 @@ use tokio::runtime::{Builder, RuntimeMetrics};
 use crate::metric::{Metric, MetricData, MetricKind};
 use crossbeam::channel::Receiver;
 use crate::Command;
+use tokio::time::{Duration, Instant};
 
 
 /// A struct representing a worker that processes tasks from a queue.
@@ -67,34 +68,21 @@ impl Worker {
             .enable_all()
             .build() {
             Ok(runtime) => {
+                let mut is_paused: bool = false;
                 loop {
                     let busy_threads = runtime.metrics().num_alive_tasks();
                     info!("Thread status {}/{}", busy_threads, num_threads);
                     
-                    let mut received_command: Option<Command> = None;
-                    loop {
-                        if let Ok(recv) = self.rx.try_recv() {
-                            match recv {
+                    if let Ok(recv) = self.rx.try_recv() {
+                        match recv {
                                 Command::WorkerResume => {
                                     info!("resumed worker {}",queue_name);
-                                    break;
+                                    is_paused = false;
                                 },
                                 Command::WorkerPause => {
                                     info!("paused worker {}",queue_name);
-                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                    is_paused = true;
                                 },
-                                _ => { 
-                                   received_command = Some(recv);
-                                   break;
-                                }
-                            }
-                        }
-                        else {
-                            break;
-                        }
-                    }
-                    if let Some(recv) = received_command {
-                        match recv {
                             Command::WorkerForceShutdown => {
                                 info!("forced shutdown worker {}",queue_name);
                                 runtime.shutdown_background();
@@ -106,11 +94,15 @@ impl Worker {
                                         info!("graceful shutdown worker {}",queue_name);
                                         break;
                                     }
-                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                    tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
                                 }
                             }
                             _ => {}
                         }
+                    }
+                    if is_paused {
+                        tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
+                        continue;
                     }
 
                     if busy_threads < num_threads {
@@ -186,7 +178,7 @@ impl Worker {
                                             }
                                         }
                                     });
-                                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                                    tokio::time::sleep_until(Instant::now() + Duration::from_millis(100)).await;
                                 }
                             }
                             Err(error) => {
@@ -195,7 +187,7 @@ impl Worker {
                         }
                     }
                     info!("Sleeping for {} second(s)", poll_interval);
-                    tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
+                    tokio::time::sleep_until(Instant::now() + Duration::from_secs(poll_interval)).await;
                 }
                 Ok(())
             }

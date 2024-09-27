@@ -14,7 +14,6 @@ mod test_command {
             lorem::en::Sentence
         }
     };
-    use tracing::Level;
     use std::ops::Range;
     use std::collections::HashMap;
     use serde_json::{Value, Number};
@@ -23,7 +22,6 @@ mod test_command {
 
     #[tokio::test]
     async fn test_scheduler(){
-        tracing_subscriber::fmt().with_max_level(Level::DEBUG).with_line_number(true).init();
         configure_database_env();
         let schedule: Schedule = Schedule::new().await;
         // Purge schedules
@@ -69,7 +67,7 @@ mod test_command {
         ] {        
             let result = tx.send(command);
             assert!(result.is_ok(),"{}",result.unwrap_err());
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
         }
         task.await.unwrap();
     }

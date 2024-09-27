@@ -14,7 +14,6 @@ mod test_worker {
             lorem::en::Sentence
         }
     };
-    use tracing::Level;
     use std::ops::Range;
     use std::collections::HashMap;
     use serde_json::{Value, Number};
@@ -44,7 +43,6 @@ mod test_worker {
 
     #[tokio::test]
     async fn test_watcher(){
-        tracing_subscriber::fmt().with_max_level(Level::DEBUG).with_line_number(true).init();
         configure_database_env();
         let queue: Queue = Queue::new().await;
         let mut task_registry: TaskRegistry = TaskRegistry::new().await;
@@ -76,7 +74,7 @@ mod test_worker {
         let  (tx, rx) = bounded::<Command>(1);
         let task = tokio::spawn(async move {
             let worker  = Worker::new(rx.clone()).await;
-            let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(2)).await;
+            let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(5)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());
         });
         

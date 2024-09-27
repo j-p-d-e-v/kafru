@@ -128,7 +128,7 @@ impl<'a> Metric<'a>{
     /// Removes metric information identified by its name.
     pub async fn remove(&self, name: String) -> Result<bool,String> {
         match self.db.client.query("DELETE FROM type::table($table) WHERE name=$name;")
-        .bind(("table",self.table))
+        .bind(("table",self.table.to_owned()))
         .bind(("name",name)).await {
             Ok(mut response) => {
                 match response.take::<Option<Value>>(0){

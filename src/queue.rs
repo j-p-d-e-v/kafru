@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{ Deserialize, Serialize};
-use surrealdb::sql::Thing;
+use surrealdb::RecordId;
 use std::collections::HashMap;
 use serde_json::{Value, Number};
 use crate::database::Db;
@@ -40,7 +40,7 @@ impl std::fmt::Display for QueueStatus {
 /// - `date_created`: *(Optional)* The timestamp when the record was created. Automatically assigned.
 /// - `date_modified`: *(Optional)* The timestamp when the record was last modified. Automatically assigned.
 pub struct QueueData {
-    pub id: Option<Thing>,
+    pub id: Option<RecordId>,
     pub name: Option<String>,
     pub queue: Option<String>,
     pub handler: Option<String>,
@@ -172,8 +172,8 @@ impl<'a> Queue<'a>{
     ///
     /// # Parameters
     /// - `id`: The ID of the queue record to remove
-    pub async fn remove(&self, id: Thing ) -> Result<QueueData,String> {
-        match self.db.client.delete::<Option<QueueData>>((self.table,id)).await {
+    pub async fn remove(&self, id: RecordId ) -> Result<QueueData,String> {
+        match self.db.client.delete::<Option<QueueData>>(id).await {
             Ok(result) => {
                 if let Some(record) = result {
                     return Ok(record);
@@ -189,7 +189,7 @@ impl<'a> Queue<'a>{
         match self.db.client.query("
             SELECT count() as total FROM type::table($table) GROUP ALL;
             DELETE FROM type::table($table);
-        ").bind(("table",self.table)).await {
+        ").bind(("table",self.table.to_owned())).await {
             Ok(mut response) => {
                 match response.take::<Option<Value>>(0){
                     Ok(data) => {
@@ -210,8 +210,8 @@ impl<'a> Queue<'a>{
     ///
     /// # Parameters
     /// - `id`: The ID of the queue record to retrieve.
-    pub async fn get(&self, id: Thing) -> Result<QueueData,String> {
-        match self.db.client.select::<Option<QueueData>>((self.table,id)).await {
+    pub async fn get(&self, id: RecordId) -> Result<QueueData,String> {
+        match self.db.client.select::<Option<QueueData>>(id).await {
             Ok(data) => {
                 if let Some(record) = data {
                     return Ok(record)
@@ -227,7 +227,7 @@ impl<'a> Queue<'a>{
     /// # Parameters
     /// - `id`: The ID of the queue record to update.
     /// - `data`: The updated queue data, provided as a `QueueData` struct.
-    pub async fn update(&self, id: Thing, data: QueueData ) -> Result<QueueData,String> {
+    pub async fn update(&self, id: RecordId, data: QueueData ) -> Result<QueueData,String> {
         match self.get(id.clone()).await  {
             Ok(record)=> {
                 let data: QueueData = QueueData {                            
@@ -241,7 +241,7 @@ impl<'a> Queue<'a>{
                     date_modified: Some(Utc::now()),
                     ..Default::default()
                 };
-                match self.db.client.update::<Option<QueueData>>((self.table,record.id.unwrap())).content(data).await {
+                match self.db.client.update::<Option<QueueData>>(record.id.unwrap()).content(data).await {
                     Ok(result) => {
                         if let Some(record) = result {
                             return Ok(record);

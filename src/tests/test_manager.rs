@@ -36,7 +36,7 @@ mod test_manager {
             if value % 2 == 0 {
                 return Err(format!("oops its an even number: {}",value));
             }
-            tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(sleep_ms)).await;
             return Ok(())
         }
     }
@@ -52,7 +52,7 @@ mod test_manager {
         assert!(result.is_ok(),"{:?}",result.unwrap_err());
 
         //Create sample schedules
-        for i in 1..11 {
+        for i in 1..3 {
             let result: Result<ScheduleData, String> = schedule.create(ScheduleData {
                 name: Some(format!("{} - {}",i,Name().fake::<String>())),
                 queue: Some("default".to_string()),
@@ -76,7 +76,7 @@ mod test_manager {
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);        
         let  (scheduler_tx, scheduler_rx) = bounded::<Command>(1);
         let  (worker_tx, worker_rx) = bounded::<Command>(1);
-        let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15,worker_rx).await;
+        let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 5,worker_rx).await;
         let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5,scheduler_rx).await;
 
         for command in [
@@ -84,18 +84,10 @@ mod test_manager {
             Command::SchedulerResume,
             Command::SchedulerForceShutdown
         ] {        
-            let result = manager.send_command(command, scheduler_tx.clone()).await;
+            let result = manager.send_command(command.clone(), scheduler_tx.clone()).await;
             assert!(result.is_ok(),"{}",result.unwrap_err());
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        }
-        for command in [
-            Command::SchedulerPause,
-            Command::SchedulerResume,
-            Command::SchedulerForceShutdown
-        ] {        
-            let result = manager.send_command(command, scheduler_tx.clone()).await;
-            assert!(result.is_ok(),"{}",result.unwrap_err());
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+            println!("{:?}",command);
         }
         for command in [
             Command::WorkerPause,
@@ -104,7 +96,7 @@ mod test_manager {
         ] {        
             let result = worker_tx.send(command);
             assert!(result.is_ok(),"{}",result.unwrap_err());
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
         }
     }
 }

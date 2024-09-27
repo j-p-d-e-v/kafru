@@ -1,6 +1,6 @@
 use crate::database::Db;
 use serde::{Serialize, Deserialize};
-use surrealdb::sql::Thing;
+use surrealdb::RecordId;
 use serde_json::{Value, Number};
 use crate::cron_schedule::CronSchedule;
 use chrono::{DateTime, Utc};
@@ -40,7 +40,7 @@ impl std::fmt::Display for ScheduleStatus {
 /// - `date_created`: (Optional) The timestamp when the schedule was created, represented as a `DateTime<Utc>`. This is used for tracking the creation time of the schedule.
 /// - `date_modified`: (Optional) The timestamp when the schedule was last modified, represented as a `DateTime<Utc>`. This is useful for tracking changes made to the schedule.
 pub struct ScheduleData {
-    pub id: Option<Thing>,
+    pub id: Option<RecordId>,
     pub name: Option<String>,
     pub queue: Option<String>,
     pub cron_expression: Option<CronSchedule>,
@@ -176,7 +176,7 @@ impl<'a> Schedule<'a>{
             if upcoming {
                 let today: DateTime<Utc> = Utc::now();
                 bindings.insert("next_schedule", Value::String(today.to_string()));
-                stmt_where.push("next_schedule <= $next_chedule");
+                stmt_where.push("next_schedule <= $next_schedule");
             }
         }
 
@@ -221,8 +221,8 @@ impl<'a> Schedule<'a>{
         }
     }
 
-    pub async fn remove(&self, id: Thing ) -> Result<ScheduleData,String> {
-        match self.db.client.delete::<Option<ScheduleData>>((self.table,id)).await {
+    pub async fn remove(&self, id: RecordId ) -> Result<ScheduleData,String> {
+        match self.db.client.delete::<Option<ScheduleData>>(id).await {
             Ok(result) => {
                 if let Some(record) = result {
                     return Ok(record);
@@ -237,7 +237,7 @@ impl<'a> Schedule<'a>{
         match self.db.client.query("
             SELECT count() as total FROM type::table($table) GROUP ALL;
             DELETE FROM type::table($table);
-        ").bind(("table",self.table)).await {
+        ").bind(("table",self.table.to_owned())).await {
             Ok(mut response) => {
                 match response.take::<Option<Value>>(0){
                     Ok(data) => {
@@ -253,8 +253,8 @@ impl<'a> Schedule<'a>{
             Err(error) => Err(error.to_string())
         }
     }
-    pub async fn get(&self, id: Thing) -> Result<ScheduleData,String> {
-        match self.db.client.select::<Option<ScheduleData>>((self.table,id)).await {
+    pub async fn get(&self, id: RecordId) -> Result<ScheduleData,String> {
+        match self.db.client.select::<Option<ScheduleData>>(id).await {
             Ok(data) => {
                 if let Some(record) = data {
                     return Ok(record)
@@ -265,7 +265,7 @@ impl<'a> Schedule<'a>{
         }
     }
 
-    pub async fn update(&self, id: Thing, data: ScheduleData, use_start_schedule_in_next_schedule: bool ) -> Result<ScheduleData,String> {
+    pub async fn update(&self, id: RecordId, data: ScheduleData, use_start_schedule_in_next_schedule: bool ) -> Result<ScheduleData,String> {
         match self.get(id.clone()).await  {
             Ok(record)=> {
                 let cron_expression: Option<CronSchedule> = if data.cron_expression.is_none() {  record.cron_expression } else { data.cron_expression };
@@ -290,7 +290,7 @@ impl<'a> Schedule<'a>{
                     date_modified: Some(Utc::now()),
                     ..Default::default()
                 };
-                match self.db.client.update::<Option<ScheduleData>>((self.table,record.id.unwrap())).content(data).await {
+                match self.db.client.update::<Option<ScheduleData>>(record.id.unwrap()).content(data).await {
                     Ok(result) => {
                         if let Some(record) = result {
                             return Ok(record);

@@ -1,7 +1,7 @@
 
 
 #[cfg(test)]
-mod test_worker {
+mod test_scheduler {
     use crate::tests::test_helper::configure_database_env;
     use crate::schedule::{Schedule, ScheduleData, ScheduleStatus};
     use crate::scheduler::Scheduler;
@@ -14,7 +14,6 @@ mod test_worker {
             lorem::en::Sentence
         }
     };
-    use tracing::Level;
     use std::ops::Range;
     use std::collections::HashMap;
     use serde_json::{Value, Number};
@@ -23,7 +22,6 @@ mod test_worker {
 
     #[tokio::test]
     async fn test_scheduler(){
-        tracing_subscriber::fmt().with_max_level(Level::DEBUG).with_line_number(true).init();
         configure_database_env();
         let schedule: Schedule = Schedule::new().await;
         // Purge schedules
@@ -58,7 +56,7 @@ mod test_worker {
         let  (tx, rx) = bounded::<Command>(1);
         let scheduler  = Scheduler::new(rx).await;
         let task = tokio::spawn(async {
-            let result = scheduler.watch(Some("kafru_test_scheduler".to_string()), Some(15)).await;
+            let result = scheduler.watch(Some("kafru_test_scheduler".to_string()), Some(5)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());
         });
         for command in [
@@ -66,9 +64,10 @@ mod test_worker {
             Command::SchedulerResume,
             Command::SchedulerForceShutdown
         ] {        
-            let result = tx.send(command);
+            let result = tx.send(command.clone());
             assert!(result.is_ok(),"{}",result.unwrap_err());
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            println!("command: {:?}",command);
         }
         task.await.unwrap();
     }

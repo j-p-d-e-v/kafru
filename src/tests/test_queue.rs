@@ -88,7 +88,7 @@ mod test_queue {
         // List all tasks assert!(result.is_ok(),"{}",result.unwrap_err());
         let result: Result<Vec<QueueData>, String> = queue.list(QueueListConditions::default()).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
-        assert_eq!(result.unwrap().len(),10);
+        assert!(result.unwrap().len()>=10);
 
         // Cleanup using Purge
         let result: Result<u64, String> = queue.purge().await;

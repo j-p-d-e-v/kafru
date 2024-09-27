@@ -11,6 +11,7 @@ use crate::queue::{
 };
 use crate::Command;
 use crate::metric::{Metric, MetricData, MetricKind};
+use tokio::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 pub struct Scheduler {
@@ -42,31 +43,18 @@ impl Scheduler{
         .enable_all()
         .build() {
             Ok(runtime)=> {
+                let mut is_paused: bool = false;
                 loop {
-                    let mut received_command: Option<Command> = None;
-                    loop {
-                        if let Ok(recv) = self.rx.try_recv() {
-                            match recv {
-                                Command::SchedulerResume => {
-                                    info!("resumed scheduler {}",scheduler_name);
-                                    break;
-                                },
-                                Command::SchedulerPause => {
-                                    info!("paused scheduler {}",scheduler_name);
-                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                                },
-                                _ => { 
-                                   received_command = Some(recv);
-                                   break;
-                                }
-                            }
-                        }
-                        else {
-                            break;
-                        }
-                    }
-                    if let Some(recv) = received_command {
+                    if let Ok(recv) = self.rx.try_recv() {
                         match recv {
+                            Command::SchedulerResume => {
+                                info!("resumed scheduler {}",scheduler_name);
+                                is_paused = false;
+                            },
+                            Command::SchedulerPause => {
+                                info!("paused scheduler {}",scheduler_name);
+                                is_paused = true;
+                            },
                             Command::SchedulerForceShutdown => {
                                 info!("forced shutdown scheduler {}",scheduler_name);
                                 runtime.shutdown_background();
@@ -78,11 +66,15 @@ impl Scheduler{
                                         info!("graceful shutdown scheduler {}",scheduler_name);
                                         break;
                                     }
-                                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                    tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
                                 }
                             }
                             _ => {}
                         }
+                    }
+                    if is_paused {
+                        tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
+                        continue;
                     }
 
                     let metric: Metric = Metric::new().await;
@@ -129,7 +121,6 @@ impl Scheduler{
                                     }).await {
                                         error!("queue scheduling error [{}]: {}",&record_name,error);
                                     }
-                                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                                 }
                             }
                             Err(error) => {
@@ -139,7 +130,8 @@ impl Scheduler{
                         drop(schedule);
                     }).await.unwrap();
                     info!("scheduler sleeping in {} second(s)",poll_interval);
-                    tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
+                    tokio::time::sleep_until(Instant::now() + Duration::from_secs(poll_interval)).await;
+                    info!("scheduler wake up");
                 }
                 Ok(())
             }

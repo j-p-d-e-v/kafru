@@ -29,6 +29,7 @@ pub mod manager;
 pub mod tests;
 
 
+#[derive(Debug, Clone)]
 /// The available commands that can be send to scheduler and worker.
 pub enum Command {
     /// Resumes the paused scheduler.
