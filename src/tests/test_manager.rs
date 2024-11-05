@@ -45,7 +45,7 @@ mod test_manager {
     async fn test(){
         configure_database_env();
 
-        let schedule: Schedule = Schedule::new().await;
+        let schedule: Schedule = Schedule::new(None).await;
 
         // Purge records
         let result = schedule.purge().await;

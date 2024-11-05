@@ -107,7 +107,7 @@ impl Worker {
 
                     if busy_threads < num_threads {
                         let idle_threads: usize = if busy_threads <= num_threads { num_threads - busy_threads } else { 0 };
-                        let queue: Queue = Queue::new().await;
+                        let queue: Queue = Queue::new(None).await;
                         match queue.list(
                             QueueListConditions {
                                 status: Some(vec![QueueStatus::Waiting.to_string()]),
@@ -118,7 +118,7 @@ impl Worker {
                                 for record in records {
                                     let registry: Arc<TaskRegistry> = task_registry.clone();
                                     let rt_metrics: RuntimeMetrics = runtime.metrics();
-                                    let metric: Metric = Metric::new().await;
+                                    let metric: Metric = Metric::new(None).await;
                                     let metric_name: String = queue_name.clone();
 
                                     // Spawn a new task to process the queue record
@@ -133,7 +133,7 @@ impl Worker {
                                             info!("Worker metrics error: {}", error);
                                         }
 
-                                        let queue: Queue = Queue::new().await;
+                                        let queue: Queue = Queue::new(None).await;
                                         let record_name: String = record.name.unwrap();
 
                                         // Update the queue record to InProgress status

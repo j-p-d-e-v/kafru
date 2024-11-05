@@ -19,7 +19,7 @@ mod test_schedule {
     #[tokio::test]
     async fn test_create_update_remove(){
         configure_database_env();
-        let schedule: Schedule = Schedule::new().await;
+        let schedule: Schedule = Schedule::new(None).await;
 
         // Purge records
         let result = schedule.purge().await;
@@ -73,7 +73,7 @@ mod test_schedule {
     #[tokio::test]
     pub async fn test_list_purge(){
         configure_database_env();
-        let schedule: Schedule = Schedule::new().await;
+        let schedule: Schedule = Schedule::new(None).await;
         
         // Purge records
         let result = schedule.purge().await;

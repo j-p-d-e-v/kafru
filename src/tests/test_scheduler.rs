@@ -23,7 +23,7 @@ mod test_scheduler {
     #[tokio::test]
     async fn test_scheduler(){
         configure_database_env();
-        let schedule: Schedule = Schedule::new().await;
+        let schedule: Schedule = Schedule::new(None).await;
         // Purge schedules
         let result: Result<u64, String> = schedule.purge().await;
         assert!(result.is_ok(),"{}",result.unwrap_err());

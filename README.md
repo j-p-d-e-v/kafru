@@ -14,10 +14,6 @@ This library offers robust background task execution with parallel processing th
 - **Worker**: Execute tasks from the queue, referencing the task registry to determine the appropriate struct for each task.
 - **SurrealDB Integration**: Store and manage scheduling details, queue information, and metrics using SurrealDB.
 
-## TODO
-- [ ] Scalability
-- [ ] Use crossbeam mpsc for metrics.
-
 ## Installation
 
 ```
@@ -29,6 +25,10 @@ cargo add kafru
 ### 1. Run SurrealDB
 
 For testing, you can start SurrealDB using an in-memory database:
+
+```bash
+cargo test -- --nocapture --test-threads=1
+```
 
 ```bash
 surreal start -u kafru_admin -p kafru_password -b 0.0.0.0:4030 --allow-all memory

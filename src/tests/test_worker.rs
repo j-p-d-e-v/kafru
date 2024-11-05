@@ -44,7 +44,7 @@ mod test_worker {
     #[tokio::test]
     async fn test_watcher(){
         configure_database_env();
-        let queue: Queue = Queue::new().await;
+        let queue: Queue = Queue::new(None).await;
         let mut task_registry: TaskRegistry = TaskRegistry::new().await;
         task_registry.register("mytesthandler".to_string(), || Box::new(MyTestStructA { message: "Hello World".to_string() })).await;
 

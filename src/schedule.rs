@@ -5,6 +5,7 @@ use serde_json::{Value, Number};
 use crate::cron_schedule::CronSchedule;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ScheduleStatus {
@@ -77,7 +78,7 @@ impl  Default for ScheduleData {
 
 #[derive(Debug)]
 pub struct Schedule<'a>{
-    db: Db,
+    db: Arc<Db>,
     pub table: &'a str
 }
 
@@ -125,9 +126,18 @@ impl Default for ScheduleListConditions {
 
 impl<'a> Schedule<'a>{
 
-    pub async fn new() -> Self {
+    /// Initializes the `Schedule` struct and Database Connection.
+    /// # Parameters
+    /// - `db`: An optional `Arc<Db>` instance representing a shared database connection.
+    ///         If provided, the `Schedule` will use this connection for its operations.
+    pub async fn new(db: Option<Arc<Db>>) -> Self {
+        let db: Arc<Db> = if db.is_some() {
+            db.unwrap().clone()
+        } else {
+            Arc::new(Db::new(None).await.unwrap())
+        };
         Self { 
-            db: Db::new(None).await.unwrap(),
+            db,
             table: "kafru_schedules"
         }
     }

@@ -2,7 +2,6 @@ use surrealdb::Surreal;
 use surrealdb::opt::auth::Root;
 use surrealdb::engine::remote::ws::{Ws, Client};
 use std::env;
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct DbConnection {
@@ -42,7 +41,7 @@ impl Default for DbConnection {
 
 #[derive(Debug)]
 pub struct Db {
-    pub client: Arc<Surreal<Client>>
+    pub client: Surreal<Client>
 }
 
 impl Db {
@@ -66,7 +65,7 @@ impl Db {
                     return Err(error.to_string());
                 }
                 Ok(Self {
-                    client: Arc::new(client),
+                    client
                 })
             }
             Err(error) => {

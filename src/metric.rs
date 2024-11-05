@@ -4,6 +4,7 @@ use surrealdb::sql::Thing;
 use serde_json::Value;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MetricKind {
@@ -45,7 +46,7 @@ impl  Default for MetricData {
 
 #[derive(Debug)]
 pub struct Metric<'a>{
-    db: Db,
+    db: Arc<Db>,
     pub table: &'a str
 }
 
@@ -63,11 +64,18 @@ impl Default for MetricListConditions {
 }
 
 impl<'a> Metric<'a>{
-
-    /// Initializes the metrics struct and sets up the database client.
-    pub async fn new() -> Self {
+    /// Initializes the `Metric` struct and Database Connection.
+    /// # Parameters
+    /// - `db`: An optional `Arc<Db>` instance representing a shared database connection.
+    ///         If provided, the `Metric` will use this connection for its operations.
+    pub async fn new(db: Option<Arc<Db>>) -> Self {
+        let db: Arc<Db> = if db.is_some() {
+            db.unwrap().clone()
+        } else {
+            Arc::new(Db::new(None).await.unwrap())
+        };
         Self { 
-            db: Db::new(None).await.unwrap(),
+            db,
             table: "kafru_metrics"
         }
     }

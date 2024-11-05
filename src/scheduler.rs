@@ -77,7 +77,7 @@ impl Scheduler{
                         continue;
                     }
 
-                    let metric: Metric = Metric::new().await;
+                    let metric: Metric = Metric::new(None).await;
                     let rt_metrics: RuntimeMetrics = runtime.metrics();
                     let metric_name: String = scheduler_name.clone();
                     runtime.spawn(async move {
@@ -90,7 +90,7 @@ impl Scheduler{
                         }).await {
                             info!("scheduler metrics error: {}",error);
                         }
-                        let schedule: Schedule = Schedule::new().await;
+                        let schedule: Schedule = Schedule::new(None).await;
                         match schedule.list(ScheduleListConditions {
                             until_schedule: Some(Utc::now()),
                             start_schedule: Some(Utc::now()),
@@ -100,7 +100,7 @@ impl Scheduler{
                         }).await {
                             Ok(records) => {
                                 info!("got {} records",records.len());
-                                let queue: Queue = Queue::new().await;
+                                let queue: Queue = Queue::new(None).await;
                                 for record in records {
                                     let record_name: String = record.name.unwrap();
                                     let record_status: ScheduleStatus = record.status.unwrap();

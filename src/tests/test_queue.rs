@@ -18,7 +18,7 @@ mod test_queue {
     #[tokio::test]
     async fn test_create_update_remove(){
         configure_database_env();
-        let queue: Queue = Queue::new().await;
+        let queue: Queue = Queue::new(None).await;
         // Push task to the queue
         let result: Result<QueueData, String> = queue.push(QueueData {
             name: Some(Name().fake::<String>()),
@@ -62,7 +62,7 @@ mod test_queue {
     #[tokio::test]
     pub async fn test_list_purge(){
         configure_database_env();
-        let queue: Queue = Queue::new().await;
+        let queue: Queue = Queue::new(None).await;
         // Purge tasks
         let result: Result<u64, String> = queue.purge().await;
         assert!(result.is_ok(),"{}",result.unwrap_err());

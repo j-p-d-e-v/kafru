@@ -7,6 +7,7 @@ use surrealdb::RecordId;
 use std::collections::HashMap;
 use serde_json::{Value, Number};
 use crate::database::Db;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum QueueStatus {
@@ -69,7 +70,7 @@ impl  Default for QueueData {
 
 #[derive(Debug)]
 pub struct Queue<'a>{
-    db: Db,
+    db: Arc<Db>,
     pub table: &'a str
 }
 
@@ -98,9 +99,17 @@ impl Default for QueueListConditions {
 impl<'a> Queue<'a>{
 
     /// Initializes the `Queue` struct and Database Connection.
-    pub async fn new() -> Self {
+    /// # Parameters
+    /// - `db`: An optional `Arc<Db>` instance representing a shared database connection.
+    ///         If provided, the `Queue` will use this connection for its operations.
+    pub async fn new(db: Option<Arc<Db>>) -> Self {
+        let db: Arc<Db> = if db.is_some() {
+            db.unwrap().clone()
+        } else {
+            Arc::new(Db::new(None).await.unwrap())
+        };
         Self { 
-            db: Db::new(None).await.unwrap(),
+            db,
             table: "kafru_queue"
         }
     }
