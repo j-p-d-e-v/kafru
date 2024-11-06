@@ -76,7 +76,7 @@ impl  Default for ScheduleData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Schedule<'a>{
     db: Arc<Db>,
     pub table: &'a str

@@ -3,7 +3,7 @@ use surrealdb::opt::auth::Root;
 use surrealdb::engine::remote::ws::{Ws, Client};
 use std::env;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct DbConnection {
     pub username: String,
     pub password: String,
@@ -39,7 +39,7 @@ impl Default for DbConnection {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Db {
     pub client: Surreal<Client>
 }

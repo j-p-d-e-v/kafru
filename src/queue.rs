@@ -68,7 +68,7 @@ impl  Default for QueueData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Queue<'a>{
     db: Arc<Db>,
     pub table: &'a str

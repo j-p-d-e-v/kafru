@@ -44,7 +44,7 @@ impl  Default for MetricData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Metric<'a>{
     db: Arc<Db>,
     pub table: &'a str

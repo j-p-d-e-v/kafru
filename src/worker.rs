@@ -18,7 +18,7 @@ use tokio::time::{Duration, Instant};
 ///
 /// The `Worker` struct manages the execution of tasks by periodically polling a queue and executing tasks
 /// with available worker threads.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Worker {
     rx: Receiver<Command>
 }
