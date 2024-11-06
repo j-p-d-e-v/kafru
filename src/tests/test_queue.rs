@@ -14,11 +14,16 @@ mod test_queue {
     use std::ops::Range;
     use std::collections::HashMap;
     use serde_json::{Value, Number};
+    use crate::database::Db;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_create_update_remove(){
         configure_database_env();
-        let queue: Queue = Queue::new(None).await;
+        let db_instance = Db::new(None).await;
+        assert!(db_instance.is_ok(),"{:?}",db_instance.err());
+        let db: Arc<Db> = Arc::new(db_instance.unwrap());
+        let queue: Queue = Queue::new(Some(db.clone())).await;
         // Push task to the queue
         let result: Result<QueueData, String> = queue.push(QueueData {
             name: Some(Name().fake::<String>()),
@@ -62,7 +67,10 @@ mod test_queue {
     #[tokio::test]
     pub async fn test_list_purge(){
         configure_database_env();
-        let queue: Queue = Queue::new(None).await;
+        let db_instance = Db::new(None).await;
+        assert!(db_instance.is_ok(),"{:?}",db_instance.err());
+        let db: Arc<Db> = Arc::new(db_instance.unwrap());
+        let queue: Queue = Queue::new(Some(db.clone())).await;
         // Purge tasks
         let result: Result<u64, String> = queue.purge().await;
         assert!(result.is_ok(),"{}",result.unwrap_err());

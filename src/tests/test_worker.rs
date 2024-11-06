@@ -21,6 +21,7 @@ mod test_worker {
     use std::sync::Arc;
     use crate::Command;
     use crossbeam::channel::bounded;
+    use crate::database::Db;
 
     pub struct MyTestStructA {
         message: String
@@ -44,7 +45,10 @@ mod test_worker {
     #[tokio::test]
     async fn test_watcher(){
         configure_database_env();
-        let queue: Queue = Queue::new(None).await;
+        let db_instance = Db::new(None).await;
+        assert!(db_instance.is_ok(),"{:?}",db_instance.err());
+        let db: Arc<Db> = Arc::new(db_instance.unwrap());
+        let queue: Queue = Queue::new(Some(db.clone())).await;
         let mut task_registry: TaskRegistry = TaskRegistry::new().await;
         task_registry.register("mytesthandler".to_string(), || Box::new(MyTestStructA { message: "Hello World".to_string() })).await;
 
@@ -73,7 +77,7 @@ mod test_worker {
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
         let  (tx, rx) = bounded::<Command>(1);
         let task = tokio::spawn(async move {
-            let worker  = Worker::new(rx.clone()).await;
+            let worker  = Worker::new(rx.clone(),Some(db.clone())).await;
             let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(5)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());
         });

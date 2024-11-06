@@ -20,6 +20,7 @@ mod test_manager {
     use std::sync::Arc;
     use crossbeam::channel::bounded;
     use crate::Command;
+    use crate::database::Db;
 
     pub struct MyTestStructA {
         message: String
@@ -45,7 +46,10 @@ mod test_manager {
     async fn test(){
         configure_database_env();
 
-        let schedule: Schedule = Schedule::new(None).await;
+        let db_instance = Db::new(None).await;
+        assert!(db_instance.is_ok(),"{:?}",db_instance.err());
+        let db: Arc<Db> = Arc::new(db_instance.unwrap());
+        let schedule: Schedule = Schedule::new(Some(db.clone())).await;
 
         // Purge records
         let result = schedule.purge().await;
@@ -76,8 +80,8 @@ mod test_manager {
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);        
         let  (scheduler_tx, scheduler_rx) = bounded::<Command>(1);
         let  (worker_tx, worker_rx) = bounded::<Command>(1);
-        let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 5,worker_rx).await;
-        let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5,scheduler_rx).await;
+        let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 5,worker_rx,Some(db.clone())).await;
+        let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5,scheduler_rx,Some(db.clone())).await;
 
         for command in [
             Command::SchedulerPause,

@@ -12,17 +12,21 @@ use crate::queue::{
 use crate::Command;
 use crate::metric::{Metric, MetricData, MetricKind};
 use tokio::time::{Duration, Instant};
+use std::sync::Arc;
+use crate::database::Db;
 
 #[derive(Debug, Clone)]
 pub struct Scheduler {
-    rx: Receiver<Command>
+    rx: Receiver<Command>,
+    db: Option<Arc<Db>>,
 }
 use crossbeam::channel::Receiver;
 
 impl Scheduler{
-    pub async fn new(rx: Receiver<Command>) -> Self {
+    pub async fn new(rx: Receiver<Command>,db: Option<Arc<Db>>) -> Self {
         Self {
-            rx
+            rx,
+            db
         }
     }
 
@@ -77,9 +81,10 @@ impl Scheduler{
                         continue;
                     }
 
-                    let metric: Metric = Metric::new(None).await;
+                    let metric: Metric = Metric::new(self.db.clone()).await;
                     let rt_metrics: RuntimeMetrics = runtime.metrics();
                     let metric_name: String = scheduler_name.clone();
+                    let db = self.db.clone();
                     runtime.spawn(async move {
                         if let Err(error) = metric.create(MetricData {
                             name: Some(metric_name),
@@ -90,7 +95,7 @@ impl Scheduler{
                         }).await {
                             info!("scheduler metrics error: {}",error);
                         }
-                        let schedule: Schedule = Schedule::new(None).await;
+                        let schedule: Schedule = Schedule::new(db.clone()).await;
                         match schedule.list(ScheduleListConditions {
                             until_schedule: Some(Utc::now()),
                             start_schedule: Some(Utc::now()),
@@ -100,7 +105,7 @@ impl Scheduler{
                         }).await {
                             Ok(records) => {
                                 info!("got {} records",records.len());
-                                let queue: Queue = Queue::new(None).await;
+                                let queue: Queue = Queue::new(db.clone()).await;
                                 for record in records {
                                     let record_name: String = record.name.unwrap();
                                     let record_status: ScheduleStatus = record.status.unwrap();

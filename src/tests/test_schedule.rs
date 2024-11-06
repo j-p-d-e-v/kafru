@@ -15,11 +15,16 @@ mod test_schedule {
     use std::collections::HashMap;
     use serde_json::{Value, Number};
     use chrono::{Days, Utc};
+    use std::sync::Arc;
+    use crate::database::Db;
 
     #[tokio::test]
     async fn test_create_update_remove(){
         configure_database_env();
-        let schedule: Schedule = Schedule::new(None).await;
+        let db_instance = Db::new(None).await;
+        assert!(db_instance.is_ok(),"{:?}",db_instance.err());
+        let db: Arc<Db> = Arc::new(db_instance.unwrap());
+        let schedule: Schedule = Schedule::new(Some(db.clone())).await;
 
         // Purge records
         let result = schedule.purge().await;
@@ -73,7 +78,10 @@ mod test_schedule {
     #[tokio::test]
     pub async fn test_list_purge(){
         configure_database_env();
-        let schedule: Schedule = Schedule::new(None).await;
+        let db_instance = Db::new(None).await;
+        assert!(db_instance.is_ok(),"{:?}",db_instance.err());
+        let db: Arc<Db> = Arc::new(db_instance.unwrap());
+        let schedule: Schedule = Schedule::new(Some(db.clone())).await;
         
         // Purge records
         let result = schedule.purge().await;

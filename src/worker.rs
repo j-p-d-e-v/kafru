@@ -1,3 +1,4 @@
+use crate::database::Db;
 use crate::task::TaskRegistry;
 use crate::queue::{
     Queue,
@@ -20,7 +21,8 @@ use tokio::time::{Duration, Instant};
 /// with available worker threads.
 #[derive(Debug,Clone)]
 pub struct Worker {
-    rx: Receiver<Command>
+    rx: Receiver<Command>,
+    db: Option<Arc<Db>>
 }
 
 impl Worker {
@@ -33,9 +35,10 @@ impl Worker {
     /// # Returns
     /// 
     /// Returns a `Worker` instance.
-    pub async fn new(rx: Receiver<Command>) -> Self {
+    pub async fn new(rx: Receiver<Command>,db: Option<Arc<Db>>) -> Self {
         Self {
-            rx
+            rx,
+            db
         }
     }
 
@@ -60,7 +63,6 @@ impl Worker {
         let poll_interval = poll_interval.unwrap_or(15);
         let queue_name = queue_name.unwrap_or(String::from("default"));
         info!("Thread pool for {} has been created with {} number of threads", queue_name, num_threads);
-
         // Build a multi-threaded Tokio runtime
         match Builder::new_multi_thread()
             .thread_name(queue_name.clone())
@@ -70,6 +72,7 @@ impl Worker {
             Ok(runtime) => {
                 let mut is_paused: bool = false;
                 loop {
+                    let db: Option<Arc<Db>> = self.db.clone();
                     let busy_threads = runtime.metrics().num_alive_tasks();
                     info!("Thread status {}/{}", busy_threads, num_threads);
                     
@@ -107,7 +110,7 @@ impl Worker {
 
                     if busy_threads < num_threads {
                         let idle_threads: usize = if busy_threads <= num_threads { num_threads - busy_threads } else { 0 };
-                        let queue: Queue = Queue::new(None).await;
+                        let queue: Queue = Queue::new(db.clone()).await;
                         match queue.list(
                             QueueListConditions {
                                 status: Some(vec![QueueStatus::Waiting.to_string()]),
@@ -116,9 +119,10 @@ impl Worker {
                             }).await {
                             Ok(records) => {
                                 for record in records {
+                                    let db: Option<Arc<Db>> = db.clone();
                                     let registry: Arc<TaskRegistry> = task_registry.clone();
                                     let rt_metrics: RuntimeMetrics = runtime.metrics();
-                                    let metric: Metric = Metric::new(None).await;
+                                    let metric: Metric = Metric::new(db.clone()).await;
                                     let metric_name: String = queue_name.clone();
 
                                     // Spawn a new task to process the queue record
@@ -133,7 +137,7 @@ impl Worker {
                                             info!("Worker metrics error: {}", error);
                                         }
 
-                                        let queue: Queue = Queue::new(None).await;
+                                        let queue: Queue = Queue::new(db.clone()).await;
                                         let record_name: String = record.name.unwrap();
 
                                         // Update the queue record to InProgress status

@@ -7,10 +7,11 @@ use crate::worker::Worker;
 use tokio::task::JoinSet;
 use crossbeam::channel::{Sender, Receiver};
 use crate::Command;
+use crate::database::Db;
 
 #[derive(Debug)]
 pub struct Manager {
-    pub join_set: JoinSet<()>,
+    pub join_set: JoinSet<()>
 }
 
 impl Manager {
@@ -31,9 +32,9 @@ impl Manager {
     /// - `task_registry`: the registry that contains the task execution handlers.
     /// - `poll_interval`: the value in seconds on how long polling will pause.
     /// - `receiver`: a channel crossbeam channel ```Receiver```.
-    pub async fn worker(&mut self, queue_name: String, num_threads: usize, task_registry: Arc<TaskRegistry>, poll_interval: u64, receiver: Receiver<Command>) -> Result<(),String> {
+    pub async fn worker(&mut self, queue_name: String, num_threads: usize, task_registry: Arc<TaskRegistry>, poll_interval: u64, receiver: Receiver<Command>, db: Option<Arc<Db>>) -> Result<(),String> {
         self.join_set.spawn( async move {
-            let worker  = Worker::new(receiver.clone()).await;
+            let worker  = Worker::new(receiver.clone(),db.clone()).await;
             let result = worker.watch(task_registry,num_threads, Some(queue_name),Some(poll_interval)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());
         });
@@ -46,9 +47,9 @@ impl Manager {
     /// - `scheduler_name`: the name of the scheduler.
     /// - `poll_interval`: the value in seconds on how long polling will pause.
     /// - `receiver`: a channel crossbeam channel ```Receiver```.
-    pub async fn scheduler(&mut self, scheduler_name: String, poll_interval: u64, receiver: Receiver<Command>) -> Result<(),String> {
+    pub async fn scheduler(&mut self, scheduler_name: String, poll_interval: u64, receiver: Receiver<Command>,db: Option<Arc<Db>>) -> Result<(),String> {
         self.join_set.spawn( async move {
-            let scheduler  = Scheduler::new(receiver.clone()).await;
+            let scheduler  = Scheduler::new(receiver.clone(),db.clone()).await;
             let _ = scheduler.watch(Some(scheduler_name), Some(poll_interval)).await;
         });
         Ok(())
