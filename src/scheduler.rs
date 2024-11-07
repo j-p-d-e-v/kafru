@@ -107,11 +107,11 @@ impl Scheduler{
                                 info!("got {} records",records.len());
                                 let queue: Queue = Queue::new(db.clone()).await;
                                 for record in records {
+                                    let _record = record.clone();
                                     let record_name: String = record.name.unwrap();
-                                    let record_status: ScheduleStatus = record.status.unwrap();
                                     if let Err(error) = schedule.update(record.id.unwrap(),ScheduleData {
-                                        status: if record.one_time == true { Some(ScheduleStatus::Disabled) } else { Some(record_status) } ,
-                                        ..Default::default()
+                                        status: if record.one_time == true { Some(ScheduleStatus::Disabled) } else { record.status },
+                                        .._record
                                     },false).await {
                                         error!("schedule update error [{}]: {}",&record_name,error);
                                     }
