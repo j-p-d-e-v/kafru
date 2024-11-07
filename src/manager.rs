@@ -18,7 +18,6 @@ impl Manager {
 
     /// Initializes the `Manager` struct, enabling the use of worker and scheduler functionalities for task management.
     pub async fn new() -> Self {
-        tracing_subscriber::fmt().with_max_level(Level::DEBUG).with_line_number(true).init();
         Self {
             join_set: JoinSet::new()
         }
