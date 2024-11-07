@@ -1,6 +1,6 @@
 [package]
 name = "kafru"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 authors = ["JP Mateo <jpmateo022@gmail.com>"]
 description = "kafru is a Python Celery-inspired queuing library for Rust, using cron for scheduling and SurrealDB for storing queues, metrics, and schedules."
