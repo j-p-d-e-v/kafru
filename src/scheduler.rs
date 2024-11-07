@@ -111,6 +111,7 @@ impl Scheduler{
                                     let record_name: String = record.name.unwrap();
                                     if let Err(error) = schedule.update(record.id.unwrap(),ScheduleData {
                                         status: if record.one_time == true { Some(ScheduleStatus::Disabled) } else { record.status },
+                                        next_schedule: None,
                                         .._record
                                     }).await {
                                         error!("schedule update error [{}]: {}",&record_name,error);

@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use surrealdb::RecordId;
 use serde_json::{Value, Number};
 use crate::cron_schedule::CronSchedule;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -291,7 +291,8 @@ impl<'a> Schedule<'a>{
                 let next_schedule: Option<DateTime<Utc>> =  if data.one_time {  None } else { 
                     if data.next_schedule.is_none() {
                         if let Some(cron_expression) = cron_expression.clone() {
-                            cron_expression.get_upcoming(Some(start_schedule)).unwrap() 
+                            let cron_upcoming_start = if start_schedule > Utc::now() { start_schedule } else { Utc::now() + Duration::minutes(1) };
+                            cron_expression.get_upcoming(Some(cron_upcoming_start)).unwrap() 
                         }
                         else {
                             return Err("cron expression is required when the next scheduled time is not provided".to_string())
