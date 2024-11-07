@@ -112,7 +112,7 @@ impl Scheduler{
                                     if let Err(error) = schedule.update(record.id.unwrap(),ScheduleData {
                                         status: if record.one_time == true { Some(ScheduleStatus::Disabled) } else { record.status },
                                         .._record
-                                    },false).await {
+                                    }).await {
                                         error!("schedule update error [{}]: {}",&record_name,error);
                                     }
                                     if let Err(error) = queue.push(QueueData {

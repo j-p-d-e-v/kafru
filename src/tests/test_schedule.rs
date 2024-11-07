@@ -53,12 +53,13 @@ mod test_schedule {
         assert_eq!(previous_record.status,Some(ScheduleStatus::Disabled));
         
         // Update record
-        let result: Result<ScheduleData, String> = schedule.update(previous_record.id.unwrap(),ScheduleData {
+        let result: Result<ScheduleData, String> = schedule.update(previous_record.id.clone().unwrap(),ScheduleData {
             status: Some(ScheduleStatus::Enabled),
             start_schedule:Utc::now().checked_add_days(Days::new(1)),
             until_schedule: Utc::now().checked_add_days(Days::new(3)),
-            ..Default::default()
-        },true).await;
+            next_schedule: Utc::now().checked_add_days(Days::new(1)),
+            ..previous_record.clone()
+        }).await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
         let next_record: ScheduleData = result.unwrap();
         assert_eq!(next_record.status,Some(ScheduleStatus::Enabled));

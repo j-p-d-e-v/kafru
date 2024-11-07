@@ -173,19 +173,19 @@ impl<'a> Schedule<'a>{
         }
         
         if let Some(start_schedule) = conditions.start_schedule {
-            bindings.insert("start_schedule", Value::String(start_schedule.to_string()));
+            bindings.insert("start_schedule", Value::String(start_schedule.to_rfc3339()));
             stmt_where.push("start_schedule <= $start_schedule");
         }
         
         if let Some(until_schedule) = conditions.until_schedule {
-            bindings.insert("until_schedule", Value::String(until_schedule.to_string()));
+            bindings.insert("until_schedule", Value::String(until_schedule.to_rfc3339()));
             stmt_where.push("until_schedule >= $until_schedule");
         }
         
         if let Some(upcoming) = conditions.upcoming {
             if upcoming {
-                let today: DateTime<Utc> = Utc::now();
-                bindings.insert("next_schedule", Value::String(today.to_string()));
+                let today: String = Utc::now().to_rfc3339();
+                bindings.insert("next_schedule", Value::String(today));
                 stmt_where.push("next_schedule <= $next_schedule");
             }
         }
@@ -216,10 +216,18 @@ impl<'a> Schedule<'a>{
 
     pub async fn create(&self, mut data: ScheduleData ) -> Result<ScheduleData,String> {
         let id: String = uuid::Uuid::new_v4().to_string();
-        let cron_expression = data.cron_expression.clone().unwrap_or_default();
         data.date_created = Some(Utc::now());       
         data.start_schedule = Some(data.start_schedule.unwrap_or(Utc::now()));
-        data.next_schedule = cron_expression.get_upcoming(data.start_schedule).unwrap();
+        if let Some(cron_expression) = data.cron_expression.clone() {
+            // If recurring schedule otherwise the next schedule is manually set.
+            let cron_expression = cron_expression;
+            data.next_schedule = cron_expression.get_upcoming(data.start_schedule).unwrap();
+        }
+        else {
+            if data.next_schedule.is_none() {
+                return Err("cron expression is required when the next scheduled time is not provided".to_string());
+            }
+        }
         match self.db.client.create::<Option<ScheduleData>>((self.table,id)).content(data).await {
             Ok(result) => {
                 if let Some(record) = result {
@@ -275,15 +283,23 @@ impl<'a> Schedule<'a>{
         }
     }
 
-    pub async fn update(&self, id: RecordId, data: ScheduleData, use_start_schedule_in_next_schedule: bool ) -> Result<ScheduleData,String> {
+    pub async fn update(&self, id: RecordId, data: ScheduleData) -> Result<ScheduleData,String> {
         match self.get(id.clone()).await  {
             Ok(record)=> {
                 let cron_expression: Option<CronSchedule> = if data.cron_expression.is_none() {  record.cron_expression } else { data.cron_expression };
                 let start_schedule: DateTime<Utc> = if data.start_schedule.is_none() {  record.start_schedule.unwrap() } else { data.start_schedule.unwrap() };
-                let next_schedule_datetime: DateTime<Utc> = if use_start_schedule_in_next_schedule {
-                    start_schedule
-                } else {
-                    Utc::now()                    
+                let next_schedule: Option<DateTime<Utc>> =  if data.one_time {  None } else { 
+                    if data.next_schedule.is_none() {
+                        if let Some(cron_expression) = cron_expression.clone() {
+                            cron_expression.get_upcoming(Some(start_schedule)).unwrap() 
+                        }
+                        else {
+                            return Err("cron expression is required when the next scheduled time is not provided".to_string())
+                        }
+                    }
+                    else {
+                        data.next_schedule
+                    }
                 };
                 let data: ScheduleData = ScheduleData {
                     name: if data.name.is_none() { record.name } else { data.name },
@@ -294,7 +310,7 @@ impl<'a> Schedule<'a>{
                     cron_expression: cron_expression.clone(),
                     one_time: data.one_time,
                     start_schedule: Some(start_schedule),
-                    next_schedule: if data.one_time {  None } else { cron_expression.unwrap().get_upcoming(Some(next_schedule_datetime)).unwrap() },
+                    next_schedule,
                     queue: if data.queue.is_none() {  record.queue } else { data.queue },
                     date_created: if data.date_created.is_none() {  record.date_created } else { data.date_created },
                     date_modified: Some(Utc::now()),
