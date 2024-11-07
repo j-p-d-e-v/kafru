@@ -1,6 +1,5 @@
 
 use crate::scheduler::Scheduler;
-use tracing::Level;
 use crate::task::TaskRegistry;
 use std::sync::Arc;
 use crate::worker::Worker;
