@@ -21,8 +21,8 @@ use tokio::time::{Duration, Instant};
 /// with available worker threads.
 #[derive(Debug,Clone)]
 pub struct Worker {
-    rx: Receiver<Command>,
-    db: Option<Arc<Db>>
+    db: Option<Arc<Db>>,
+    server: String
 }
 
 impl Worker {
@@ -35,10 +35,10 @@ impl Worker {
     /// # Returns
     /// 
     /// Returns a `Worker` instance.
-    pub async fn new(rx: Receiver<Command>,db: Option<Arc<Db>>) -> Self {
+    pub async fn new(rx: Receiver<Command>,db: Option<Arc<Db>>, server: String) -> Self {
         Self {
-            rx,
-            db
+            db,
+            server
         }
     }
 
@@ -78,23 +78,23 @@ impl Worker {
                     
                     if let Ok(recv) = self.rx.try_recv() {
                         match recv {
-                                Command::WorkerResume => {
-                                    info!("resumed worker {}",queue_name);
-                                    is_paused = false;
-                                },
-                                Command::WorkerPause => {
-                                    info!("paused worker {}",queue_name);
-                                    is_paused = true;
-                                },
-                            Command::WorkerForceShutdown => {
-                                info!("forced shutdown worker {}",queue_name);
+                            Command::QueueResume => {
+                                info!("resumed queue {}",queue_name);
+                                is_paused = false;
+                            },
+                            Command::QueuePause => {
+                                info!("paused queue {}",queue_name);
+                                is_paused = true;
+                            },
+                            Command::QueueForceShutdown => {
+                                info!("forced shutdown queue {}",queue_name);
                                 runtime.shutdown_background();
                                 break;
                             }
-                            Command::WorkerGracefulShutdown => {
+                            Command::QueueGracefulShutdown => {
                                 loop {
                                     if runtime.metrics().num_alive_tasks() == 0 {
-                                        info!("graceful shutdown worker {}",queue_name);
+                                        info!("graceful shutdown queue {}",queue_name);
                                         break;
                                     }
                                     tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
@@ -126,7 +126,7 @@ impl Worker {
                                     let metric_name: String = queue_name.clone();
 
                                     // Spawn a new task to process the queue record
-                                    runtime.spawn(async move {
+                                    let jh = runtime.spawn(async move {
                                         if let Err(error) = metric.create(MetricData {
                                             name: Some(metric_name),
                                             kind: Some(MetricKind::Worker),
@@ -151,6 +151,8 @@ impl Worker {
                                                 match registry.get(record.handler.unwrap()).await {
                                                     Ok(handler) => {
                                                         info!("Executing task [{}]", record_name);
+                                                        println!("CURRENT-JH-ID: {:#?}",tokio::task::id());
+                                                        todo!("Supply AgentId");
                                                         match handler().run(record.parameters.unwrap()).await {
                                                             Ok(_) => {
                                                                 if let Err(error) = queue.update(record.id.unwrap(), QueueData {
@@ -182,6 +184,7 @@ impl Worker {
                                             }
                                         }
                                     });
+                                    println!("JH-ID: {:#?}",jh.id());
                                     tokio::time::sleep_until(Instant::now() + Duration::from_millis(100)).await;
                                 }
                             }
