@@ -2,6 +2,7 @@ use surrealdb::Surreal;
 use surrealdb::opt::auth::Root;
 use surrealdb::engine::remote::ws::{Ws, Client};
 use std::env;
+use tracing::{error, instrument};
 
 #[derive(Debug,Clone)]
 pub struct DbConnection {
@@ -50,6 +51,7 @@ impl Db {
     /// 
     /// # Parameters
     /// - `config`: *(Optional)* Database connection configuration. If not provided, the configuration can be automatically loaded from environment variables.
+    #[instrument(skip_all)]
     pub async fn new(config: Option<DbConnection>) -> Result<Self,String> {
         let config: DbConnection = config.unwrap_or_default();
         let address: String = format!("{}:{}", config.host,config.port);
@@ -59,9 +61,11 @@ impl Db {
                     username: config.username.as_str(),
                     password: config.password.as_str(),
                 }).await {
+                    error!("{}",error);
                     return Err(error.to_string());
                 }
                 if let Err(error) = client.use_ns(config.namespace).use_db(config.database).await {
+                    error!("{}",error);
                     return Err(error.to_string());
                 }
                 Ok(Self {
@@ -69,6 +73,7 @@ impl Db {
                 })
             }
             Err(error) => {
+                error!("{}",error);
                 Err(error.to_string())
             }
         }   

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 /// Manages the database connection and client interactions.
 pub mod database;
 
@@ -28,8 +30,11 @@ pub mod manager;
 // Unit and integration test cases for the modules.
 pub mod tests;
 
+// Agent for sending commands/signals to worker agent, scheduler agent
+pub mod agent;
 
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 /// The available commands that can be send to scheduler and worker.
 pub enum Command {
     /// Resumes the paused scheduler.
@@ -40,12 +45,20 @@ pub enum Command {
     SchedulerForceShutdown,
     /// Force shutdown the scheduler, it will wait for the execution to complete.
     SchedulerGracefulShutdown,
-    /// Resumes the paused worker/queue.
-    WorkerResume,
-    /// Suspend/Pause the worker/queue.
-    WorkerPause,
-    /// Force shutdown the worker/queue, it will not wait for the execution to complete.
-    WorkerForceShutdown,
-    /// Force shutdown the worker/queue, it will wait for the execution to complete.
-    WorkerGracefulShutdown
+    /// Resumes the paused queue.
+    QueueResume,
+    /// Suspend/Pause the queue.
+    QueuePause,
+    /// Force shutdown the queue, it will not wait for the execution to complete.
+    QueueForceShutdown,
+    /// Force shutdown the queue, it will wait for the execution to complete.
+    QueueGracefulShutdown,
+    /// Terminate a Task.
+    TaskTerminate,
 }
+
+//todo!("Replace command of Workers,Scheduler instead from TX/RX to SurrealDB Based Add Queue command");
+//todo!("We can use task id to directly identify and abort a specific thread/task.");
+//todo!("Create a global variable to hold the task id (possibly v)");
+//todo!("Put the command in database for scalability");
+//todo!("For Scability the kafru instance should have an identifier so we can target specific workers, queues, and scheduler when running multiple instances");
