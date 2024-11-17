@@ -45,6 +45,7 @@ mod test_worker {
     #[tokio::test]
     async fn test_watcher(){
         configure_database_env();
+        let server: String = "server1".to_string();
         let db_instance = Db::new(None).await;
         assert!(db_instance.is_ok(),"{:?}",db_instance.err());
         let db: Arc<Db> = Arc::new(db_instance.unwrap());
@@ -75,19 +76,18 @@ mod test_worker {
             }).await;
         }
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
-        let  (tx, rx) = bounded::<Command>(1);
         let task = tokio::spawn(async move {
-            let worker  = Worker::new(rx.clone(),Some(db.clone())).await;
+            let worker  = Worker::new(Some(db.clone()),server.clone()).await;
             let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(5)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());
         });
         
         for command in [
-            Command::WorkerPause,
-            Command::WorkerResume,
-            Command::WorkerForceShutdown
-        ] {        
-            let result = tx.send(command);
+            Command::QueuePause,
+            Command::QueueResume,
+            Command::QueueForceShutdown
+        ] { 
+            todo!("replace with new send");
             assert!(result.is_ok(),"{}",result.unwrap_err());
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
         }

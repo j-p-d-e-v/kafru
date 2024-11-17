@@ -74,7 +74,8 @@ mod test_manager {
             }).await;
             assert!(result.is_ok(),"{}",result.unwrap_err());
         }
-        let mut manager = Manager::new().await;
+        let server: String = "server1".to_string();
+        let mut manager = Manager::new(server).await;
         let mut task_registry: TaskRegistry = TaskRegistry::new().await;
         task_registry.register("mytesthandler".to_string(), || Box::new(MyTestStructA { message: "Hello World".to_string() })).await;
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);        
@@ -94,9 +95,9 @@ mod test_manager {
             println!("{:?}",command);
         }
         for command in [
-            Command::WorkerPause,
-            Command::WorkerResume,
-            Command::WorkerForceShutdown
+            Command::QueuePause,
+            Command::QueueResume,
+            Command::QueueForceShutdown
         ] {        
             let result = worker_tx.send(command);
             assert!(result.is_ok(),"{}",result.unwrap_err());
