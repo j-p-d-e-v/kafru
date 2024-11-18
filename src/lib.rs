@@ -46,10 +46,6 @@ pub enum Command {
     /// Force shutdown the scheduler, it will wait for the execution to complete.
     SchedulerGracefulShutdown,
     /// Resumes the paused queue.
-    QueueResume,
-    /// Suspend/Pause the queue.
-    QueuePause,
-    /// Force shutdown the queue, it will not wait for the execution to complete.
     QueueForceShutdown,
     /// Force shutdown the queue, it will wait for the execution to complete.
     QueueGracefulShutdown,
