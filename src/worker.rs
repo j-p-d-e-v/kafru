@@ -151,6 +151,7 @@ impl Worker {
             .build() {
             Ok(runtime) => {
                 todo!("You are doing test for the worker and it panicking when setting a timeout.");
+                todo!("Need to update agent information once command is executed.");
                 //let mut is_paused: bool = false;
                 let queue_agent: AgentData = self.agent.register(AgentData {
                     name: queue_name.clone(),
