@@ -84,6 +84,21 @@ impl Default for AgentData {
     }
 }
 
+#[derive(Debug,Clone,Deserialize,Serialize, Default)]
+pub struct AgentFilter {
+    pub id: Option<RecordId>,
+    pub parent: Option<RecordId>,
+    pub queue_id: Option<RecordId>,
+    pub name: Option<String>,
+    pub kind: Option<AgentKind>,
+    pub server: Option<String>,
+    pub runtime_id: Option<u64>,
+    pub status: Option<AgentStatus>,
+    pub command: Option<Command>,
+    pub command_is_executed: Option<bool>,
+    pub message: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Agent {
     db: Arc<Db>,
@@ -145,6 +160,103 @@ impl Agent {
 
     pub async fn remove(&self) -> Result<bool,String> {
         todo!("remove the record");
+    }
+
+    pub async fn get_by_id(&self,id: RecordId) -> Result<AgentData, String> {
+
+        match self.db.client.select::<Option<AgentData>>(id.clone()).await {
+            Ok(data) => {
+                if let Some(item) = data {
+                    return Ok(item);
+                }
+                return Err(format!("unable to find agent with id: {:?}",id));
+            }
+            Err(error) => {
+                error!("{}",error);
+                Err(format!("database error when retrieving agent data with id: {:?}",id))
+            }
+        }
+    }
+
+    pub async fn list(&self,filters: AgentFilter) -> Result<Vec<AgentData>,String> {
+        let mut  stmt: String = "SELECT * FROM  type::table($table)".to_string();
+        let mut where_stmt: Vec<String> = Vec::new();
+
+        // WHERE placeholders
+        if filters.id.is_some() {
+            where_stmt.push("type::thing(id)=$id".to_string());
+        }
+        if filters.parent.is_some() {
+            where_stmt.push("type::thing(parent)=$parent".to_string());
+        }
+        if filters.command.is_some() {
+            where_stmt.push("command=$command".to_string());
+        }
+        if filters.command_is_executed.is_some() {
+            where_stmt.push("command_is_executed=$command_is_executed".to_string());
+        }
+        if filters.kind.is_some() {
+            where_stmt.push("kind=$kind".to_string());
+        }
+        if filters.name.is_some() {
+            where_stmt.push("name=$name".to_string());
+        }
+        if filters.queue_id.is_some() {
+            where_stmt.push("queue_id=$queue_id".to_string());
+        }
+        if filters.server.is_some() {
+            where_stmt.push("server=$server".to_string());
+        }
+        if filters.status.is_some() {
+            where_stmt.push("status=$status".to_string());
+        }
+        if !where_stmt.is_empty() {
+            stmt = format!("{} WHERE {}",stmt,where_stmt.join(" AND "));
+        }
+
+        // VALUE Binding
+        let mut query = self.db.client.query(stmt).bind(("table",self.table.clone()));
+        
+        if let Some(value) = filters.id {
+            query = query.bind(("id",value));
+        }
+        if let Some(value) = filters.parent {
+            query = query.bind(("parent",value));
+        }
+        if let Some(value) = filters.command {
+            query = query.bind(("command",value));
+        }
+        if let Some(value) = filters.command_is_executed {
+            query = query.bind(("command_is_executed",value));
+        }
+        if let Some(value) = filters.kind {
+            query = query.bind(("kind",value));
+        }
+        if let Some(value) = filters.name {
+            query = query.bind(("name",value));
+        }
+        if let Some(value) = filters.queue_id {
+            query = query.bind(("queue_id",value));
+        }
+        if let Some(value) = filters.server {
+            query = query.bind(("server",value));
+        }
+        if let Some(value) = filters.status {
+            query = query.bind(("status",value));
+        }
+
+        match query.await {
+            Ok(mut response) => {
+                if let Ok(data) =  response.take::<Vec<AgentData>>(0) {
+                    return Ok(data);
+                }
+                return Err(format!("unable to retrive agent data"));
+            }
+            Err(error) => {
+                error!("{}",error);
+                return Err("database error when retrieving agent data".to_string());
+            }
+        }
     }
 
     pub async fn update_by_id(&self,id: RecordId, data:AgentData) -> Result<AgentData,String> {
@@ -249,6 +361,13 @@ pub mod test_agent {
         assert!(result.is_ok(),"{:?}",result.err());
         assert!(result.unwrap());
 
+        let agents_data = agent.list(AgentFilter {
+            server: Some("server1".to_string()),
+            ..Default::default()
+        }).await;
+        assert!(agents_data.is_ok(),"{:?}",agents_data.err());
+        assert!(agents_data.unwrap().len() == 0);
+
         for s in 1..3 {
             let server: String = format!("server{}",s);
             for i in 1..11 {
@@ -270,5 +389,11 @@ pub mod test_agent {
                 assert!(data.status != updated_data.status);
             }
         }
+        let agents_data = agent.list(AgentFilter {
+            server: Some("server1".to_string()),
+            ..Default::default()
+        }).await;
+        assert!(agents_data.is_ok(),"{:?}",agents_data.err());
+        assert!(agents_data.unwrap().len() == 10);
     }
 }

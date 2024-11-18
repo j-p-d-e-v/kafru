@@ -32,7 +32,7 @@ impl Manager {
     /// - `task_registry`: the registry that contains the task execution handlers.
     /// - `poll_interval`: the value in seconds on how long polling will pause.
     /// - `receiver`: a channel crossbeam channel ```Receiver```.
-    pub async fn worker(&mut self, queue_name: String, num_threads: usize, task_registry: Arc<TaskRegistry>, poll_interval: u64, receiver: Receiver<Command>, db: Option<Arc<Db>>) -> Result<(),String> {
+    pub async fn worker(&mut self, queue_name: String, num_threads: usize, task_registry: Arc<TaskRegistry>, poll_interval: u64, db: Option<Arc<Db>>) -> Result<(),String> {
         let server: String = self.server.clone();
         self.join_set.spawn( async move {
             let worker  = Worker::new(db.clone(),server).await;

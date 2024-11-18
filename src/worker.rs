@@ -6,7 +6,8 @@ use crate::queue::{
     QueueStatus,
     QueueListConditions
 };
-use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex;
+use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
 use tracing::{instrument, info, error};
@@ -31,26 +32,26 @@ pub struct Worker {
 #[derive(Debug)]
 pub struct WorkerTask {
     agent_data: AgentData,
-    handle: JoinHandle<()>
+    handle: Option<JoinHandle<()>>
 }
 
 impl WorkerTask {
     
-    pub async fn add(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, agent_data: AgentData, handle: JoinHandle<()>) {
-        let mut data = tasks.lock().unwrap();
-        let key: String = format!("{}-{}",queue_name,handle.id().to_string());
+    pub async fn add(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64, agent_data: AgentData, handle: Option<JoinHandle<()>>) {
+        let mut data = tasks.lock().await;
+        let key: String = format!("{}-{}",queue_name,runtime_id);
         data.insert(key, WorkerTask {
             agent_data,
             handle
         });
     }
     pub async fn remove(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64) {
-        let mut data = tasks.lock().unwrap();
+        let mut data = tasks.lock().await;
         let key: String = format!("{}-{}",queue_name,runtime_id);
         data.remove(&key);
     } 
     pub async fn get_agent_data(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64) -> Result<AgentData,String> {
-        let data = tasks.lock().unwrap();
+        let data = tasks.lock().await;
         let key: String = format!("{}-{}",queue_name,runtime_id);
         if let Some(item) = data.get(&key).clone() {
             return Ok(item.agent_data.to_owned());
@@ -58,22 +59,26 @@ impl WorkerTask {
         return Err(format!("unable to get agent data for {}",key));
     } 
     pub async fn abort(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64) -> Result<bool,String> {
-        let data = tasks.lock().unwrap();
+        let data = tasks.lock().await;
         let key: String = format!("{}-{}",queue_name,runtime_id);
         if let Some(item) = data.get(&key).clone() {
-            item.handle.abort();
+            if let Some(handle) = &item.handle {
+                handle.abort();
+            } 
             return Ok(true);
         }
-        return Err(format!("unable to get data for {}",key));
+        return Err(format!("unable to execute abort status for worker task {}",key));
     } 
-    pub async fn is_finished(tasks: Arc<Mutex<HashMap<String,JoinHandle<()>>>>,queue_name: String, runtime_id: u64) -> Result<bool,String> {
-        let data = tasks.lock().unwrap();
+    pub async fn is_finished(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64) -> Result<bool,String> {
+        let data = tasks.lock().await;
         let key: String = format!("{}-{}",queue_name,runtime_id);
-        if let Some(handle) = data.get(&key).clone() {
-            handle.is_finished();
+        if let Some(item) = data.get(&key).clone() {
+            if let Some(handle) = &item.handle {
+                handle.is_finished();
+            } 
             return Ok(true);
         }
-        return Err(format!("unable to get data for {}",key));
+        return Err(format!("unable to get is_finished status for worker task {}",key));
     } 
 
 }
@@ -97,8 +102,24 @@ impl Worker {
         }
     }
 
-    pub async fn check_command(&self,task_handles: Arc<Mutex<HashMap<String,WorkerTask>>>) {
-        todo!("test");
+    
+    pub async fn check_command(&self,task_handles: Arc<Mutex<HashMap<String,WorkerTask>>>) -> Result<Option<AgentData>,String> {
+        let handles = task_handles.lock().await;
+        for hkey in handles.keys() {
+            let hitem = handles.get(hkey).unwrap();
+            let agdata: AgentData = hitem.agent_data.clone();
+            match self.agent.get_by_id(agdata.id.unwrap()).await {
+                Ok(item) => {
+                    if item.command_is_executed == false {
+                        return Ok(Some(item))
+                    }
+                }
+                Err(error) => {
+                    return Err(error)
+                }
+            }
+        }
+        Ok(None)
     }
 
     /// Starts watching the task queue and processes tasks.
@@ -129,7 +150,8 @@ impl Worker {
             .enable_all()
             .build() {
             Ok(runtime) => {
-                let mut is_paused: bool = false;
+                todo!("You are doing test for the worker and it panicking when setting a timeout.");
+                //let mut is_paused: bool = false;
                 let queue_agent: AgentData = self.agent.register(AgentData {
                     name: queue_name.clone(),
                     kind: AgentKind::Queue,
@@ -139,44 +161,46 @@ impl Worker {
                     ..Default::default()
                 }).await?;
                 let task_handles: Arc<Mutex<HashMap<String,WorkerTask>>> = Arc::new(Mutex::new(HashMap::new())); 
+                WorkerTask::add(task_handles.clone(),queue_name.clone(), 0, queue_agent.clone(), None).await;
                 loop {
                     let db: Option<Arc<Db>> = self.db.clone();
-                    let busy_threads = runtime.metrics().num_alive_tasks();
-                    info!("Thread status {}/{}", busy_threads, num_threads);
-                    let _task_handles = task_handles.clone();  
-                    self.check_command(task_handles.clone()).await;                  
-                    //if let Ok(recv) = self.rx.try_recv() {
-                    //    match recv {
-                    //        Command::QueueResume => {
-                    //            info!("resumed queue {}",queue_name);
-                    //            is_paused = false;
-                    //        },
-                    //        Command::QueuePause => {
-                    //            info!("paused queue {}",queue_name);
-                    //            is_paused = true;
-                    //        },
-                    //        Command::QueueForceShutdown => {
-                    //            info!("forced shutdown queue {}",queue_name);
-                    //            runtime.shutdown_background();
-                    //            break;
-                    //        }
-                    //        Command::QueueGracefulShutdown => {
-                    //            loop {
-                    //                if runtime.metrics().num_alive_tasks() == 0 {
-                    //                    info!("graceful shutdown queue {}",queue_name);
-                    //                    break;
-                    //                }
-                    //                tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
-                    //            }
-                    //        }
-                    //        _ => {}
-                    //    }
-                    //}
-                    if is_paused {
-                        tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
-                        continue;
+
+                    let got_command = self.check_command(task_handles.clone()).await?;
+                    if let Some(mitem) = got_command {
+                        if let Some(comand) = mitem.command.clone() {
+                            match comand {
+                                Command::TaskTerminate => {
+                                    info!("terminate task queue {:#?}",mitem);    
+                                    WorkerTask::abort(task_handles.clone(), queue_name.clone(), mitem.runtime_id.clone()).await?;  
+                                    WorkerTask::remove(task_handles.clone(), queue_name.clone(), mitem.runtime_id.clone()).await;                         
+                                },
+                                Command::QueueForceShutdown => {
+                                    info!("forced shutdown queue {}",queue_name.clone());
+                                    runtime.shutdown_background();
+                                    break;
+                                }
+                                Command::QueueGracefulShutdown => {
+                                    loop {
+                                        if runtime.metrics().num_alive_tasks() == 0 {
+                                            info!("graceful shutdown queue {}",queue_name);
+                                            break;
+                                        }
+                                        tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
                     }
 
+                    //if let Ok(recv) = self.rx.try_recv() {
+                    //}
+                    //if is_paused {
+                    //    tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
+                    //    continue;
+                    //}
+                    let busy_threads = runtime.metrics().num_alive_tasks();
+                    info!("Thread status {}/{}", busy_threads, num_threads);
                     if busy_threads < num_threads {
                         let idle_threads: usize = if busy_threads <= num_threads { num_threads - busy_threads } else { 0 };
                         let queue: Queue = Queue::new(db.clone()).await;
@@ -286,7 +310,7 @@ impl Worker {
                                     }).await {
                                         Ok(task_agent) => {
                                             let _task_handles: Arc<Mutex<HashMap<String, WorkerTask>>> = task_handles.clone();                      
-                                            WorkerTask::add(_task_handles.clone(),queue_name.clone(), task_agent, task_handle).await;
+                                            WorkerTask::add(_task_handles.clone(),queue_name.clone(), runtime_id, task_agent, Some(task_handle)).await;
                                         }
                                         Err(error) => {
                                             error!("{}",error);
@@ -304,7 +328,7 @@ impl Worker {
                     info!("Sleeping for {} second(s)", poll_interval);
                     tokio::time::sleep_until(Instant::now() + Duration::from_secs(poll_interval)).await;
                 }
-                //Ok(())
+                Ok(())
             }
             Err(error) => {
                 Err(error.to_string())
