@@ -11,16 +11,18 @@ use crate::database::Db;
 #[derive(Debug)]
 pub struct Manager {
     pub join_set: JoinSet<()>,
-    pub server: String
+    pub server: String,
+    pub author: String
 }
 
 impl Manager {
 
     /// Initializes the `Manager` struct, enabling the use of worker and scheduler functionalities for task management.
-    pub async fn new(server: String) -> Self {
+    pub async fn new(server: String, author: String) -> Self {
         Self {
             join_set: JoinSet::new(),
-            server
+            server,
+            author
         }
     }
 
@@ -34,8 +36,9 @@ impl Manager {
     /// - `receiver`: a channel crossbeam channel ```Receiver```.
     pub async fn worker(&mut self, queue_name: String, num_threads: usize, task_registry: Arc<TaskRegistry>, poll_interval: u64, db: Option<Arc<Db>>) -> Result<(),String> {
         let server: String = self.server.clone();
+        let author: String = self.author.clone();
         self.join_set.spawn( async move {
-            let worker  = Worker::new(db.clone(),server).await;
+            let worker  = Worker::new(db.clone(),server,author).await;
             let result = worker.watch(task_registry,num_threads, Some(queue_name),Some(poll_interval)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());
         });

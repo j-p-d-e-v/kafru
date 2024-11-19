@@ -75,7 +75,7 @@ mod test_manager {
             assert!(result.is_ok(),"{}",result.unwrap_err());
         }
         let server: String = "server1".to_string();
-        let mut manager = Manager::new(server).await;
+        let mut manager = Manager::new(server,"Juan dela Cruz".to_string()).await;
         let mut task_registry: TaskRegistry = TaskRegistry::new().await;
         task_registry.register("mytesthandler".to_string(), || Box::new(MyTestStructA { message: "Hello World".to_string() })).await;
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);        
