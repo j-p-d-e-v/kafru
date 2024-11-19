@@ -158,8 +158,24 @@ impl Agent {
         }
     }
 
-    pub async fn remove(&self) -> Result<bool,String> {
-        todo!("remove the record");
+    pub async fn remove(&self,id: RecordId, include_related: bool) -> Result<bool,String> {
+        match self.db.client.delete::<Option<AgentData>>(id.clone()).await {
+            Ok(_) => {
+                if include_related {
+                    if let Err(error) = self.db.client.query("DELETE FROM type::table($table) WHERE type::thing(parent)=$parent")
+                    .bind(("table",self.table.clone()))
+                    .bind(("parent",id.clone())).await {
+                        error!("{}",error);
+                        return Err(format!("database error when deleting related data of agent data with id: {:?}",id));
+                    }
+                }
+                Ok(true)
+            }
+            Err(error) => {
+                error!("{}",error);
+                Err(format!("database error when deleting agent data with id: {:?}",id))
+            }
+        }
     }
 
     pub async fn get_by_id(&self,id: RecordId) -> Result<AgentData, String> {
@@ -320,13 +336,21 @@ impl Agent {
             return Err("kind is required".to_string())
         }
         if data.runtime_id == 0 && data.kind == AgentKind::Task {
-            return Err("runtime_id must be greater than 0 for task".to_string());
-        }
-        if data.queue_id.is_none() && data.kind == AgentKind::Task {
-            return Err("runtime_id must be greater than 0 for task".to_string());
+            return Err(format!("runtime_id must be greater than 0 for task got {}",data.runtime_id));
         }
         if let Err(error) = self.create_table(data.server.clone()).await {
             return Err(error);
+        }
+        if let Ok(items) = self.list(AgentFilter {
+            server: Some(data.server.clone()),
+            name: Some(data.name.clone()),
+            ..Default::default()
+        }).await {
+            if items.len() > 0 {
+                if let Some(item) = items.first() {
+                    self.remove(item.id.clone().unwrap(),true).await?;
+                }
+            }
         }
         match self.db.client.create::<Option<AgentData>>(self.table.clone()).content(data.clone()).await {
             Ok(response) => {

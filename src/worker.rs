@@ -150,8 +150,13 @@ impl Worker {
             .enable_all()
             .build() {
             Ok(runtime) => {
-                todo!("You are doing test for the worker and it panicking when setting a timeout.");
-                todo!("Need to update agent information once command is executed.");
+                // todo!("how to clear left over data from specific server lets say crash but some agents are still valid? And also clear related tasks of it.");
+                // todo!("apply logic to be able to only register one queue name per server.");
+                // todo!("apply logic if queue name already exists to the server.")
+                // todo!("Send command feature");
+                // todo!("Improve Code and Logic");
+                // todo!("Test");
+                // todo!("Document");
                 //let mut is_paused: bool = false;
                 let queue_agent: AgentData = self.agent.register(AgentData {
                     name: queue_name.clone(),
@@ -168,16 +173,23 @@ impl Worker {
 
                     let got_command = self.check_command(task_handles.clone()).await?;
                     if let Some(mitem) = got_command {
-                        if let Some(comand) = mitem.command.clone() {
-                            match comand {
+                        if let Some(command) = mitem.command.clone() {
+                            println!("Worker Command Received: {:?}",command);
+                            match command {
                                 Command::TaskTerminate => {
                                     info!("terminate task queue {:#?}",mitem);    
                                     WorkerTask::abort(task_handles.clone(), queue_name.clone(), mitem.runtime_id.clone()).await?;  
-                                    WorkerTask::remove(task_handles.clone(), queue_name.clone(), mitem.runtime_id.clone()).await;                         
+                                    WorkerTask::remove(task_handles.clone(), queue_name.clone(), mitem.runtime_id.clone()).await;     
+                                    if let Err(error) = self.agent.remove(mitem.id.clone().unwrap(),false).await {
+                                        error!("task agent remove error [{}]: {}", queue_name.clone(), error);
+                                    }                    
                                 },
                                 Command::QueueForceShutdown => {
                                     info!("forced shutdown queue {}",queue_name.clone());
                                     runtime.shutdown_background();
+                                    if let Err(error) = self.agent.remove(mitem.id.clone().unwrap(),true).await {
+                                        error!("task agent remove error [{}]: {}", queue_name.clone(), error);
+                                    }
                                     break;
                                 }
                                 Command::QueueGracefulShutdown => {
@@ -186,6 +198,9 @@ impl Worker {
                                             info!("graceful shutdown queue {}",queue_name);
                                             break;
                                         }
+                                        if let Err(error) = self.agent.remove(mitem.id.clone().unwrap(),true).await {
+                                            error!("task agent remove error [{}]: {}", queue_name.clone(), error);
+                                        }
                                         tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
                                     }
                                 }
@@ -193,13 +208,6 @@ impl Worker {
                             }
                         }
                     }
-
-                    //if let Ok(recv) = self.rx.try_recv() {
-                    //}
-                    //if is_paused {
-                    //    tokio::time::sleep_until(Instant::now() + Duration::from_secs(1)).await;
-                    //    continue;
-                    //}
                     let busy_threads = runtime.metrics().num_alive_tasks();
                     info!("Thread status {}/{}", busy_threads, num_threads);
                     if busy_threads < num_threads {
@@ -219,7 +227,8 @@ impl Worker {
                                     let rt_metrics: RuntimeMetrics = runtime.metrics();
                                     let metric: Metric = Metric::new(db.clone()).await;
                                     let metric_name: String = queue_name.clone();
-                                    let queue_id = queue_agent.id.clone().unwrap();
+                                    let queue_agent_id = queue_agent.id.clone().unwrap();
+                                    let queue_id = record.id.clone().unwrap();
                                     let _task_handles: Arc<Mutex<HashMap<String, WorkerTask>>> = task_handles.clone();
                                     // Spawn a new task to process the queue record
                                     let task_handle = runtime.spawn(async move {
@@ -263,14 +272,7 @@ impl Worker {
                                                                             ..Default::default()
                                                                         }).await {
                                                                             error!("task execution result error [{}]: {}", record_name, error);
-                                                                        }
-                                                                        if let Err(error) = agent.update_by_id(task_agent.id.clone().unwrap(),AgentData {
-                                                                            status: AgentStatus::Completed,
-                                                                            ..task_agent
-                                                                        }).await {
-                                                                            error!("task agent update error [{}]: {}", record_name, error);
-                                                                        }                                                              
-                                                                        WorkerTask::remove(_task_handles.clone(),metric_name.clone(),runtime_id.clone()).await;
+                                                                        }                                                           
                                                                     }
                                                                     Err(error) => {
                                                                         if let Err(error) = queue.update(record.id.unwrap(), QueueData {
@@ -281,7 +283,11 @@ impl Worker {
                                                                             error!("task execution error [{}]: {}", record_name, error);
                                                                         }
                                                                     }
-                                                                }  
+                                                                }
+                                                                if let Err(error) = agent.remove(task_agent.id.clone().unwrap(),false).await {
+                                                                    error!("task agent remove error [{}]: {}", record_name, error);
+                                                                }
+                                                                WorkerTask::remove(_task_handles.clone(),metric_name.clone(),runtime_id.clone()).await;          
                                                             }
                                                             Err(error) => {
                                                                 error!(error);
@@ -298,14 +304,16 @@ impl Worker {
                                                 error!("queue update error [{}]: {}", record_name, error);
                                             }
                                         }
-                                    });                 
+                                    });             
                                     let runtime_id: u64 = task_handle.id().to_string().parse::<u64>().unwrap();
                                     let agent_name: String = format!("{}-{}",&queue_name,&runtime_id);
                                     match self.agent.register(AgentData {
                                         name: format!("{}-{}",&queue_name,&runtime_id),
                                         kind: AgentKind::Task,
                                         status: AgentStatus::Initialized,
-                                        parent: Some(queue_id.clone()),
+                                        server: self.server.clone(),
+                                        parent: Some(queue_agent_id.clone()),
+                                        queue_id: Some(queue_id),
                                         runtime_id: runtime_id.clone(),
                                         ..Default::default()
                                     }).await {
@@ -314,8 +322,7 @@ impl Worker {
                                             WorkerTask::add(_task_handles.clone(),queue_name.clone(), runtime_id, task_agent, Some(task_handle)).await;
                                         }
                                         Err(error) => {
-                                            error!("{}",error);
-                                            return Err(format!("unable to register task agent {}",agent_name));
+                                            return Err(format!("unable to register task agent [{}]: {}",agent_name,error));
                                         }
                                     }   
                                     tokio::time::sleep_until(Instant::now() + Duration::from_millis(100)).await;
@@ -325,7 +332,7 @@ impl Worker {
                                 error!("Queue list error: {}", error);
                             }
                         }
-                    }
+                    }  
                     info!("Sleeping for {} second(s)", poll_interval);
                     tokio::time::sleep_until(Instant::now() + Duration::from_secs(poll_interval)).await;
                 }
