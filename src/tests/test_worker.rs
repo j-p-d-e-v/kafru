@@ -21,6 +21,7 @@ mod test_worker {
     use std::sync::Arc;
     use crate::Command;
     use crate::database::Db;
+    use crate::agent::{Agent,AgentData,AgentFilter,AgentStatus,AgentKind};
 
     pub struct MyTestStructA {
         message: String
@@ -33,10 +34,10 @@ mod test_worker {
             println!("message: {}",self.message);
             let sleep_ms = rand::thread_rng().gen_range(Range{ start:3, end: 10 }) * 1000;
             let value = rand::thread_rng().gen_range(Range{ start:0, end: 100 });
+            tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
             if value % 2 == 0 {
                 return Err(format!("oops its an even number: {}",value));
             }
-            tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
             return Ok(())
         }
     }
@@ -68,27 +69,52 @@ mod test_worker {
                     ),
                     (
                         "number".to_string(),
-                        Value::Number(Number::from(rand::thread_rng().gen_range(Range{start:100, end:1000})))
+                        Value::Number(Number::from(rand::thread_rng().gen_range(Range{start:1000, end:3000})))
                     )
                 ])),
                 ..Default::default()
             }).await;
         }
+        let agent: Agent = Agent::new(Some(db.clone())).await;
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
-        let task: tokio::task::JoinHandle<()> = tokio::spawn(async move {
-            let worker  = Worker::new(Some(db.clone()),server.clone()).await;
+        let _: tokio::task::JoinHandle<()> = tokio::spawn(async move {
+            let worker  = Worker::new(Some(db.clone()),server.clone(),"Juan dela Cruz".to_string()).await;
             let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(5)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());
         });
-        
-        for command in [
-            Command::QueueForceShutdown
-        ] { 
-            //todo!("replace with new send");
-            //assert!(result.is_ok(),"{}",result.unwrap_err());
-            println!("{:?}",command);
-            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+        tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+        let mut previous_count: usize = 99;
+        loop {
+            match agent.list(AgentFilter {
+                kind: Some(AgentKind::Task),
+                statuses: Some(Vec::from([AgentStatus::Initialized,AgentStatus::Running])),
+                ..Default::default()
+            }).await {
+                Ok(data) => {
+                    if previous_count != data.len() {
+                        println!("Total Tasks Remaining: {}",data.len());
+                        previous_count = data.len();
+                    }
+                    if data.len() == 0 {
+                        assert!(true);
+                        break;
+                    }
+                    for item in data {
+                        if let Err(error) = agent.update_by_id(item.id.clone().unwrap(), AgentData {
+                            command: Some(
+                                Command::TaskTerminate),
+                            ..Default::default()
+                        }).await {
+                            assert!(false,"unable to update command: {}",error);
+                        }
+                    }
+                }
+                Err(error)  => {
+                    assert!(false,"unable to send command: {}",error);
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         }
-        task.await.unwrap();
     }
 }

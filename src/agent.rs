@@ -51,18 +51,31 @@ impl fmt::Display for AgentStatus {
 
 #[derive(Debug,Clone,Deserialize,Serialize)]
 pub struct AgentData {
+    #[serde(skip_serializing_if="Option::is_none")]
     pub id: Option<RecordId>,
+    #[serde(skip_serializing_if="Option::is_none")]
     pub parent: Option<RecordId>,
+    #[serde(skip_serializing_if="Option::is_none")]
     pub queue_id: Option<RecordId>,
-    pub name: String,
-    pub kind: AgentKind,
-    pub server: String,
-    pub runtime_id: u64,
-    pub status: AgentStatus,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub kind: Option<AgentKind>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub server: Option<String>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub runtime_id: Option<u64>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub status: Option<AgentStatus>,
+    #[serde(skip_serializing_if="Option::is_none")]
     pub command: Option<Command>,
-    pub command_is_executed: bool,
-    pub message: String,
-    pub created_at: DateTime<Utc>
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub command_is_executed: Option<bool>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub author: Option<String>,
+    pub date_modified: DateTime<Utc>
 }
 
 impl Default for AgentData {
@@ -71,15 +84,16 @@ impl Default for AgentData {
             id: None,
             parent: None,
             queue_id: None,
-            name: String::new(),
-            kind: AgentKind::None,
-            server: String::new(),
-            runtime_id: 0,
-            status: AgentStatus::Initialized,
+            name: None,
+            kind: None,
+            server: None,
+            runtime_id: None,
+            status: None,
             command: None,
-            command_is_executed: false,
-            message: String::new(),
-            created_at: Utc::now()
+            command_is_executed: None,
+            message: None,
+            author: None,
+            date_modified: Utc::now()
         }
     }
 }
@@ -94,6 +108,7 @@ pub struct AgentFilter {
     pub server: Option<String>,
     pub runtime_id: Option<u64>,
     pub status: Option<AgentStatus>,
+    pub statuses: Option<Vec<AgentStatus>>,
     pub command: Option<Command>,
     pub command_is_executed: Option<bool>,
     pub message: Option<String>,
@@ -226,6 +241,9 @@ impl Agent {
         if filters.status.is_some() {
             where_stmt.push("status=$status".to_string());
         }
+        if filters.statuses.is_some() {
+            where_stmt.push("status IN $statuses".to_string());
+        }
         if !where_stmt.is_empty() {
             stmt = format!("{} WHERE {}",stmt,where_stmt.join(" AND "));
         }
@@ -260,7 +278,9 @@ impl Agent {
         if let Some(value) = filters.status {
             query = query.bind(("status",value));
         }
-
+        if let Some(values) = filters.statuses {
+            query = query.bind(("statuses",values));
+        }
         match query.await {
             Ok(mut response) => {
                 if let Ok(data) =  response.take::<Vec<AgentData>>(0) {
@@ -276,16 +296,16 @@ impl Agent {
     }
 
     pub async fn update_by_id(&self,id: RecordId, data:AgentData) -> Result<AgentData,String> {
-        match self.db.client.update::<Option<AgentData>>(id).content(data.clone()).await {
+        match self.db.client.update::<Option<AgentData>>(id).merge(data.clone()).await {
             Ok(response) => {
                 if let Some(data) = response {
                     return Ok(data);
                 }
-                Err(format!("agent {} under server {} not found",data.name,data.server))
+                Err(format!("agent {} under server {} not found",data.name.unwrap(),data.server.unwrap()))
             }
             Err(error) => {
                 error!("{}",error);
-                Err(format!("unable to update agent {} under server {}",data.name,data.server))
+                Err(format!("unable to update agent {} under server {}",data.name.unwrap(),data.server.unwrap()))
             }
         }
     }
@@ -306,44 +326,55 @@ impl Agent {
                                     if let Some(data) = response {
                                         return Ok(data);
                                     }
-                                    return Err(format!("agent {} under server {} not found",&data.name,&data.server));
+                                    return Err(format!("agent {} under server {} not found",&data.name.unwrap(),&data.server.unwrap()));
                                 }
                                 Err(error) => {
                                     error!("{}",error);
-                                    return Err(format!("unable to update agent {} under server {}",&item.name,&item.server));
+                                    return Err(format!("unable to update agent {} under server {}",&item.name.unwrap(),&item.server.unwrap()));
                                 }
                             }
                         }
                         None => {
-                            return Err(format!("query for agent {} under server {} returns nothing",&data.name,&data.server));                            
+                            return Err(format!("query for agent {} under server {} returns nothing",&data.name.unwrap(),&data.server.unwrap()));                            
                         }
                     }
                 }
-                Err(format!("database error for agent {} under server {}",&data.name,&data.server))       
+                Err(format!("database error for agent {} under server {}",&data.name.unwrap(),&data.server.unwrap()))       
             }
             Err(error) =>{
                 error!("{}",error);
-                Err(format!("database error for agent {} under server {}",&data.name,&data.server))
+                Err(format!("database error for agent {} under server {}",&data.name.unwrap(),&data.server.unwrap()))
             }
         }
     }
 
-    pub async fn register(&self, data: AgentData) -> Result<AgentData,String>{
-        if data.name.len() == 0 {
+    pub async fn register(&self, mut data: AgentData) -> Result<AgentData,String>{
+        if let Some(value) = data.name.clone() {
+            if value.len() < 3 {
+                return Err("name must be atleast more than 3 characters".to_string());
+            }
+        }
+        else {            
             return Err("name is required".to_string());
         }
-        if data.kind == AgentKind::None {
+        if data.kind.is_none() {
             return Err("kind is required".to_string())
         }
-        if data.runtime_id == 0 && data.kind == AgentKind::Task {
-            return Err(format!("runtime_id must be greater than 0 for task got {}",data.runtime_id));
+        if data.runtime_id == Some(0) && data.kind == Some(AgentKind::Task) {
+            return Err(format!("runtime_id must be greater than 0 for task got {}",data.runtime_id.unwrap()));
         }
-        if let Err(error) = self.create_table(data.server.clone()).await {
+        if data.server.is_none() {
+            return Err(format!("server is required"));
+        }
+        if let Err(error) = self.create_table(data.server.clone().unwrap()).await {
             return Err(error);
         }
+        if data.command_is_executed.is_none() {
+            data.command_is_executed = Some(false);
+        }
         if let Ok(items) = self.list(AgentFilter {
-            server: Some(data.server.clone()),
-            name: Some(data.name.clone()),
+            server: data.server.clone(),
+            name: data.name.clone(),
             ..Default::default()
         }).await {
             if items.len() > 0 {
@@ -357,12 +388,12 @@ impl Agent {
                 if let Some(data) = response {
                     return Ok(data);
                 }
-                return Err(format!("no data found for agent {} at server {}",data.name,data.server))
+                return Err(format!("no data found for agent {} at server {}",data.name.unwrap(),data.server.unwrap()))
             }
             Err(error) => {
                 error!("{}",error);
                 println!("{:?}",error);
-                Err(format!("unable to register agent {} at server {}",data.name,data.server))
+                Err(format!("unable to register agent {} at server {}",data.name.unwrap(),data.server.unwrap()))
             }
         }
     }
@@ -396,16 +427,16 @@ pub mod test_agent {
             let server: String = format!("server{}",s);
             for i in 1..11 {
                 let result = agent.register(AgentData {
-                    name: format!("queue-{}-server-{}",i,s),
-                    kind: AgentKind::Queue,
-                    server: server.clone(),
-                    runtime_id: i,
+                    name: Some(format!("queue-{}-server-{}",i,s)),
+                    kind: Some(AgentKind::Queue),
+                    server: Some(server.clone()),
+                    runtime_id: Some(i),
                     ..Default::default()
                 }).await;
                 assert!(result.is_ok(),"{:?}",result.err());
                 let data = result.unwrap();
                 let updated_result = agent.update_by_id(data.id.clone().unwrap(), AgentData {
-                    status: AgentStatus::Completed,
+                    status: Some(AgentStatus::Completed),
                     ..data
                 } ).await;
                 assert!(updated_result.is_ok(),"{:?}",updated_result.err());
@@ -415,9 +446,17 @@ pub mod test_agent {
         }
         let agents_data = agent.list(AgentFilter {
             server: Some("server1".to_string()),
+            statuses: Some(Vec::from([AgentStatus::Initialized,AgentStatus::Completed])),
             ..Default::default()
         }).await;
         assert!(agents_data.is_ok(),"{:?}",agents_data.err());
         assert!(agents_data.unwrap().len() == 10);
+        let agents_data = agent.list(AgentFilter {
+            server: Some("server1".to_string()),
+            statuses: Some(Vec::from([AgentStatus::Running,AgentStatus::Error])),
+            ..Default::default()
+        }).await;
+        assert!(agents_data.is_ok(),"{:?}",agents_data.err());
+        assert!(agents_data.unwrap().len() == 0);
     }
 }
