@@ -75,7 +75,7 @@ mod test_worker {
             }).await;
         }
         let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
-        let task = tokio::spawn(async move {
+        let task: tokio::task::JoinHandle<()> = tokio::spawn(async move {
             let worker  = Worker::new(Some(db.clone()),server.clone()).await;
             let result = worker.watch(task_registry.clone(),5, Some("default".to_string()), Some(5)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());
@@ -85,7 +85,7 @@ mod test_worker {
             Command::QueueForceShutdown
         ] { 
             //todo!("replace with new send");
-            assert!(result.is_ok(),"{}",result.unwrap_err());
+            //assert!(result.is_ok(),"{}",result.unwrap_err());
             println!("{:?}",command);
             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
         }

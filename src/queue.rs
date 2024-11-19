@@ -110,7 +110,7 @@ impl<'a> Queue<'a>{
         };
         Self { 
             db,
-            table: "kafru_queue"
+            table: "kafru_queues"
         }
     }
 
