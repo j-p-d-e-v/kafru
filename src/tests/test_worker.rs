@@ -32,9 +32,9 @@ mod test_worker {
             println!("My Parameters: {:#?}",params);            
             println!("{}",Sentence(Range{start: 1, end:3}).fake::<String>());
             println!("message: {}",self.message);
-            let sleep_ms = rand::thread_rng().gen_range(Range{ start:3, end: 10 }) * 1000;
+            let sleep_ms = rand::thread_rng().gen_range(Range{ start:1, end: 3 }) * 1000;
             let value = rand::thread_rng().gen_range(Range{ start:0, end: 100 });
-            tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
+            //tokio::time::sleep(std::time::Duration::from_millis(sleep_ms)).await;
             if value % 2 == 0 {
                 return Err(format!("oops its an even number: {}",value));
             }
@@ -100,15 +100,18 @@ mod test_worker {
                         assert!(true);
                         break;
                     }
-                    for item in data {
-                        if let Err(error) = agent.update_by_id(item.id.clone().unwrap(), AgentData {
-                            command: Some(
-                                Command::TaskTerminate),
-                            ..Default::default()
-                        }).await {
-                            assert!(false,"unable to update command: {}",error);
-                        }
-                    }
+                    //for item in data {
+                    //    let random_number = rand::thread_rng().gen_range(Range{start:1000, end:3000});
+                    //    if random_number % 2 == 0  {
+                    //        if let Err(error) = agent.update_by_id(item.id.clone().unwrap(), AgentData {
+                    //            command: Some(
+                    //                Command::TaskTerminate),
+                    //            ..Default::default()
+                    //        }).await {
+                    //            assert!(false,"unable to update command: {}",error);
+                    //        }
+                    //    }
+                    //}
                 }
                 Err(error)  => {
                     assert!(false,"unable to send command: {}",error);

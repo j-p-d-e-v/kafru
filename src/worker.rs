@@ -31,39 +31,48 @@ pub struct Worker {
     author: String
 }
 
+type TaskHandles = HashMap<String,WorkerTaskData>;
+
 #[derive(Debug)]
-pub struct WorkerTask {
+pub struct WorkerTask{
+    db: Option<Arc<Db>>
+}
+
+#[derive(Debug)]
+pub struct WorkerTaskData {
     agent_data: AgentData,
     handle: Option<JoinHandle<()>>
 }
 
-impl WorkerTask {
-    
-    pub async fn add(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64, agent_data: AgentData, handle: Option<JoinHandle<()>>) {
-        let mut data = tasks.lock().await;
-        let key: String = format!("{}-{}",queue_name,runtime_id);
-        data.insert(key, WorkerTask {
-            agent_data,
-            handle
-        });
+
+impl WorkerTask{
+
+    pub async fn new(data: WorkerTask) -> Self {
+        Self {
+            ..data
+        }
     }
-    pub async fn remove(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64) {
-        let mut data = tasks.lock().await;
+    
+    pub async fn add(&self, worker_data: WorkerTaskData, task_handles: &mut TaskHandles,queue_name: String, runtime_id: u64) {
         let key: String = format!("{}-{}",queue_name,runtime_id);
-        data.remove(&key);
+        println!("add: {}",key);
+        task_handles.insert(key, worker_data);
+    }
+    pub async fn remove(&self,task_handles: &mut TaskHandles, queue_name: String, runtime_id: u64) {
+        let key: String = format!("{}-{}",queue_name,runtime_id);
+        task_handles.remove(&key);
     } 
-    pub async fn get_agent_data(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64) -> Result<AgentData,String> {
-        let data = tasks.lock().await;
+    pub async fn get_agent(&self,task_handles: &mut TaskHandles, queue_name: String, runtime_id: u64) -> Result<AgentData,String> {
         let key: String = format!("{}-{}",queue_name,runtime_id);
-        if let Some(item) = data.get(&key).clone() {
+        println!("add: {:?}",task_handles.keys());
+        if let Some(item) = task_handles.get(&key).clone() {
             return Ok(item.agent_data.to_owned());
         }
         return Err(format!("unable to get agent data for {}",key));
     } 
-    pub async fn abort(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64) -> Result<bool,String> {
-        let data = tasks.lock().await;
+    pub async fn abort(&mut self,task_handles: &mut TaskHandles, queue_name: String, runtime_id: u64) -> Result<bool,String> {
         let key: String = format!("{}-{}",queue_name,runtime_id);
-        if let Some(item) = data.get(&key).clone() {
+        if let Some(item) = task_handles.get(&key).clone() {
             if let Some(handle) = &item.handle {
                 handle.abort();
             } 
@@ -71,17 +80,41 @@ impl WorkerTask {
         }
         return Err(format!("unable to execute abort status for worker task {}",key));
     } 
-    pub async fn is_finished(tasks: Arc<Mutex<HashMap<String,WorkerTask>>>,queue_name: String, runtime_id: u64) -> Result<bool,String> {
-        let data = tasks.lock().await;
-        let key: String = format!("{}-{}",queue_name,runtime_id);
-        if let Some(item) = data.get(&key).clone() {
-            if let Some(handle) = &item.handle {
-                handle.is_finished();
-            } 
-            return Ok(true);
+
+    pub async fn update_status(
+        &self,
+        queue: Option<QueueData>,
+        agent:  Option<AgentData>,
+    ) -> Result<(Option<QueueData>,Option<AgentData>),String> {
+        let mut queue_data: Option<QueueData> = None;
+        let mut agent_data: Option<AgentData> = None;
+        if let Some(data) = queue {
+            if let Ok(data) = Queue::new(self.db.clone()).await.update(data.id.clone().unwrap(), QueueData { 
+                id: None,
+                ..data
+            } ).await {
+                queue_data = Some(data);
+            }
+            else {
+                return Err("unable to update queue status".to_string());
+            }
         }
-        return Err(format!("unable to get is_finished status for worker task {}",key));
-    } 
+        if let Some(data) = agent {
+            if let Ok(data) = Agent::new(self.db.clone()).await.update_by_id(data.id.clone().unwrap(), AgentData {
+                id: None,
+                ..data
+            }).await {
+                agent_data = Some(data);
+            }    
+            else {
+                return Err("unable to update agent status".to_string());
+            }
+        }
+
+        Ok((queue_data,agent_data))
+
+
+    }
 
 }
 
@@ -106,12 +139,11 @@ impl Worker {
     }
 
     
-    pub async fn check_command(&self,task_handles: Arc<Mutex<HashMap<String,WorkerTask>>>) -> Result<Option<AgentData>,String> {
-        let handles = task_handles.lock().await;
-        for hkey in handles.keys() {
-            let hitem = handles.get(hkey).unwrap();
+    pub async fn check_command(&self,task_handles: &TaskHandles) -> Result<Option<AgentData>,String> {
+        for hkey in task_handles.keys() {
+            let hitem = task_handles.get(hkey).unwrap();
             let agdata: AgentData = hitem.agent_data.clone();
-            match self.agent.get_by_id(agdata.id.unwrap()).await {
+            match self.agent.get(agdata.id.unwrap()).await {
                 Ok(item) => {
                     if item.command_is_executed == Some(false) {
                         return Ok(Some(item))
@@ -153,10 +185,10 @@ impl Worker {
             .enable_all()
             .build() {
             Ok(runtime) => {
-                todo!("how to clear left over data from specific server lets say crash but some agents are still valid? And also clear related tasks of it.");
-                todo!("Improve Code and Logic");
-                todo!("Test");
-                todo!("Document");
+                // todo!("check if we can avoid accessing the task handles inside the thread. it seems possible to do since the queueid is attached to the agent data.")
+                // todo!("Improve Code and Logic");
+                // todo!("Test");
+                // todo!("Document");
                 let queue_agent: AgentData = self.agent.register(AgentData {
                     name: Some(queue_name.clone()),
                     kind: Some(AgentKind::Queue),
@@ -165,33 +197,51 @@ impl Worker {
                     status: Some(AgentStatus::Running),
                     ..Default::default()
                 }).await?;
-                let task_handles: Arc<Mutex<HashMap<String,WorkerTask>>> = Arc::new(Mutex::new(HashMap::new())); 
-                WorkerTask::add(task_handles.clone(),queue_name.clone(), 0, queue_agent.clone(), None).await;
+                let mut task_handles:HashMap<String,WorkerTaskData> = HashMap::new(); 
+                let worker_task: WorkerTask = WorkerTask::new(WorkerTask {
+                    db: self.db.clone()
+                }).await;
+                worker_task.add(
+                    WorkerTaskData { 
+                        handle: None, 
+                        agent_data: queue_agent.clone()
+                    },
+                    &mut task_handles,
+                    queue_name.clone(), 0
+                ).await;
                 loop {
                     let db: Option<Arc<Db>> = self.db.clone();
-                    let got_command = self.check_command(task_handles.clone()).await?;
+                    let got_command = self.check_command(&mut task_handles,).await?;
                     if let Some(mitem) = got_command {
                         if let Some(command) = mitem.command.clone() {
                             println!("Worker Command Received: {:?}",command);
                             let ag_runtime_id: u64 = mitem.runtime_id.clone().unwrap();
                             let ag_queue_id: RecordId = mitem.queue_id.clone().unwrap();
                             match command {
+                                Command::TaskTerminate => { 
+                                    info!("remove task {:#?}",queue_name.clone()); 
+                                    worker_task.remove(&mut task_handles,queue_name.clone(), ag_runtime_id.clone()).await;
+                                },
                                 Command::TaskTerminate => {
                                     info!("terminated task {:#?}",queue_name.clone());    
-                                    WorkerTask::abort(task_handles.clone(), queue_name.clone(), ag_runtime_id.clone()).await?;  
-                                    WorkerTask::remove(task_handles.clone(), queue_name.clone(), ag_runtime_id.clone()).await;     
-                                    if let Err(error) = self.agent.update_by_id(mitem.id.clone().unwrap(),AgentData { 
-                                        command_is_executed: Some(true),
-                                        status: Some(AgentStatus::Terminated),
-                                        ..Default::default()
-                                    }).await {
-                                        error!("task agent update error [{}]: {}", queue_name.clone(), error);
-                                    }                                        
-                                    let queue: Queue = Queue::new(db.clone()).await;
-                                    queue.update(ag_queue_id, QueueData {
-                                        status: Some(QueueStatus::Error),
-                                        ..Default::default()
-                                    }).await?;                
+                                    worker_task.abort(&mut task_handles,queue_name.clone(), ag_runtime_id.clone()).await?; 
+                                    if let Err(error) = worker_task.update_status(
+                                        Some(QueueData {
+                                            id: Some(ag_queue_id),
+                                            status: Some(QueueStatus::Error),
+                                            message: Some("task has been terminated".to_string()),
+                                            ..Default::default()
+                                        }),
+                                        Some(AgentData {
+                                            id: Some(mitem.id.unwrap()),
+                                            status: Some(AgentStatus::Terminated),
+                                            command_is_executed: Some(true),
+                                            message: None,
+                                            ..Default::default()
+                                        })
+                                    ).await {
+                                        error!("tark termination result error [{}]: {}", queue_name.clone(), error);
+                                    }             
                                 },
                                 Command::QueueForceShutdown => {
                                     info!("forced shutdown queue {}",queue_name.clone());
@@ -231,16 +281,29 @@ impl Worker {
                             Ok(records) => {
                                 for record in records {
                                     let db: Option<Arc<Db>> = db.clone();
-                                    let agent: Agent = Agent::new(db.clone()).await;
                                     let registry: Arc<TaskRegistry> = task_registry.clone();
                                     let rt_metrics: RuntimeMetrics = runtime.metrics();
                                     let metric: Metric = Metric::new(db.clone()).await;
                                     let metric_name: String = queue_name.clone();
                                     let queue_agent_id = queue_agent.id.clone().unwrap();
                                     let queue_id = record.id.clone().unwrap();
-                                    let _task_handles: Arc<Mutex<HashMap<String, WorkerTask>>> = task_handles.clone();
+                                    let _worker_task: WorkerTask = WorkerTask::new(WorkerTask {
+                                        db: db.clone()
+                                    }).await;
                                     // Spawn a new task to process the queue record
+                                    if let Err(error) = _worker_task.update_status(   
+                                        Some(QueueData {
+                                            id: Some(queue_id.clone()),
+                                            status: Some(QueueStatus::InProgress),
+                                            message: Some(String::new()),
+                                            ..Default::default()
+                                        }),
+                                        None
+                                    ).await {
+                                        error!("task update result error [{}]: {}", queue_name.clone(), error);
+                                    }     
                                     let task_handle = runtime.spawn(async move {
+
                                         if let Err(error) = metric.create(MetricData {
                                             name: Some(metric_name.clone()),
                                             kind: Some(MetricKind::Worker),
@@ -250,84 +313,86 @@ impl Worker {
                                         }).await {
                                             info!("Worker metrics error: {}", error);
                                         }
-
-                                        let queue: Queue = Queue::new(db.clone()).await;
                                         let record_name: String = record.name.unwrap();
-
-                                        // Update the queue record to InProgress status
-                                        match queue.update(record.id.unwrap(), QueueData {
-                                            status: Some(QueueStatus::InProgress),
-                                            ..Default::default()
-                                        }).await {
-                                            Ok(record) => {
-                                                info!("Received task [{}]", record_name);
-                                                match registry.get(record.handler.unwrap()).await {
-                                                    Ok(handler) => {
-                                                        info!("Executing task [{}]", record_name);
-                                                        let runtime_id: u64 = tokio::task::id().to_string().parse::<u64>().unwrap();
-                                                        
-                                                        match WorkerTask::get_agent_data(_task_handles.clone(), metric_name.clone(), runtime_id).await {
-                                                            Ok(task_agent) => {
-                                                                if let Err(error) = agent.update_by_id(task_agent.id.clone().unwrap(),AgentData {
-                                                                    status: Some(AgentStatus::Running),
-                                                                    ..Default::default()
-                                                                }).await {
-                                                                    error!("task agent update error [{}]: {}", record_name, error);
-                                                                }     
-                                                                match handler().run(record.parameters.unwrap()).await {
-                                                                    Ok(_) => {
-                                                                        if let Err(error) = queue.update(record.id.unwrap(), QueueData {
-                                                                            status: Some(QueueStatus::Completed),
-                                                                            ..Default::default()
-                                                                        }).await {
-                                                                            error!("task execution result error [{}]: {}", record_name, error);
-                                                                        }
-                                                                        if let Err(error) = agent.update_by_id(task_agent.id.clone().unwrap(),AgentData {
-                                                                            status: Some(AgentStatus::Completed),
-                                                                            ..Default::default()
-                                                                        }).await {
-                                                                            error!("task agent update error [{}]: {}", record_name, error);
-                                                                        }                                                                
-                                                                    }
-                                                                    Err(error) => {
-                                                                        if let Err(error) = queue.update(record.id.unwrap(), QueueData {
-                                                                            status: Some(QueueStatus::Error),
-                                                                            message: Some(error.clone()),
-                                                                            ..Default::default()
-                                                                        }).await {
-                                                                            error!("task execution error [{}]: {}", record_name, error);
-                                                                        }
-                                                                        if let Err(error) = agent.update_by_id(task_agent.id.clone().unwrap(),AgentData {
-                                                                            status: Some(AgentStatus::Error),
-                                                                            message: Some(error.clone()),
-                                                                            ..Default::default()
-                                                                        }).await {
-                                                                            error!("task agent update error [{}]: {}", record_name, error);
-                                                                        }   
-                                                                    }
-                                                                }
-                                                                WorkerTask::remove(_task_handles.clone(),metric_name.clone(),runtime_id.clone()).await;          
+                                        let record_handler: String = record.handler.unwrap();
+                                        let record_id: RecordId = record.id.unwrap();
+                                        info!("Received task [{}]", record_name);
+                                        match registry.get(record_handler).await {
+                                            Ok(handler) => {
+                                                info!("Executing task [{}]", record_name);       
+                                                let runtime_id: u64 = tokio::task::id().to_string().parse::<u64>().unwrap();                                                 
+                                                match _worker_task.get_agent( metric_name.clone(), runtime_id).await {
+                                                    Ok(task_agent) => {
+                                                        if let Err(error) = _worker_task.update_status(
+                                                            None,
+                                                            Some(AgentData {
+                                                                id: task_agent.id.clone(),
+                                                                status: Some(AgentStatus::Running),
+                                                                message: None,
+                                                                ..Default::default()
+                                                            })
+                                                        ).await {
+                                                            error!("task execution result error [{}]: {}", record_name, error);
+                                                        }        
+                                                        match handler().run(record.parameters.unwrap()).await {
+                                                            Ok(_) => {
+                                                                println!("completed=={}",record_id.clone());
+                                                                if let Err(error) = _worker_task.update_status(
+                                                                    Some(QueueData {
+                                                                        id: Some(record_id.clone()),
+                                                                        status: Some(QueueStatus::Completed),
+                                                                        message: None,
+                                                                        ..Default::default()
+                                                                    }),
+                                                                    Some(AgentData {
+                                                                        id: task_agent.id.clone(),
+                                                                        status: Some(AgentStatus::Completed),
+                                                                        message: None,
+                                                                        ..Default::default()
+                                                                    })
+                                                                ).await {
+                                                                    error!("task execution result error [{}]: {}", record_name, error);
+                                                                }                                                          
                                                             }
                                                             Err(error) => {
-                                                                error!(error);
+                                                                println!("Error: {}",error);
+                                                                if let Err(error) = _worker_task.update_status(
+                                                                    Some(QueueData {
+                                                                        id: Some(record_id.clone()),
+                                                                        status: Some(QueueStatus::Error),
+                                                                        message: Some(error.clone()),
+                                                                        ..Default::default()
+                                                                    }),
+                                                                    Some(AgentData {
+                                                                        id: task_agent.id.clone(),
+                                                                        status: Some(AgentStatus::Error),
+                                                                        message: Some(error.clone()),
+                                                                        ..Default::default()
+                                                                    })
+                                                                ).await {
+                                                                    error!("task execution result error [{}]: {}", record_name, error);
+                                                                }
                                                             }
-                                                        }                                                         
+                                                        }
+                                                        //_worker_task.remove(metric_name.clone(),runtime_id.clone()).await;          
                                                     }
                                                     Err(error) => {
-                                                        error!("task registry error [{}]: {}", record_name, error);
+                                                        error!(error);
+                                                        println!("{}",error);
                                                     }
-                                                }
-                                                info!("exiting task [{}]", record_name);
+                                                }                                                         
                                             }
                                             Err(error) => {
-                                                error!("queue update error [{}]: {}", record_name, error);
+                                                error!("task registry error [{}]: {}", record_name, error);
+                                                println!("{}",error);
                                             }
                                         }
+                                        info!("exiting task [{}]", record_name);
                                     });             
                                     let runtime_id: u64 = task_handle.id().to_string().parse::<u64>().unwrap();
                                     let agent_name: String = format!("{}-{}",&queue_name,&runtime_id);
                                     match self.agent.register(AgentData {
-                                        name: Some(format!("{}-{}",&queue_name,&runtime_id)),
+                                        name: Some(agent_name.clone()),
                                         kind: Some(AgentKind::Task),
                                         status: Some(AgentStatus::Initialized),
                                         server: Some(self.server.clone()),
@@ -337,11 +402,14 @@ impl Worker {
                                         runtime_id: Some(runtime_id.clone()),
                                         ..Default::default()
                                     }).await {
-                                        Ok(task_agent) => {
-                                            let _task_handles: Arc<Mutex<HashMap<String, WorkerTask>>> = task_handles.clone();                      
-                                            WorkerTask::add(_task_handles.clone(),queue_name.clone(), runtime_id, task_agent, Some(task_handle)).await;
+                                        Ok(task_agent) => {      
+                                            worker_task.add(WorkerTaskData {
+                                                agent_data: task_agent, 
+                                                handle: Some(task_handle)
+                                            },queue_name.clone(), runtime_id).await;
                                         }
                                         Err(error) => {
+                                            println!("{}",error);
                                             return Err(format!("unable to register task agent [{}]: {}",agent_name,error));
                                         }
                                     }   
