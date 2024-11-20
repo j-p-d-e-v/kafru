@@ -51,6 +51,8 @@ pub enum Command {
     QueueGracefulShutdown,
     /// Terminate a Task.
     TaskTerminate,
+    /// Remove a Task.
+    TaskRemove,
 }
 
 //todo!("Replace command of Workers,Scheduler instead from TX/RX to SurrealDB Based Add Queue command");

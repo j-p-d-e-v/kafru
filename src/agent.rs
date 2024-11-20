@@ -193,7 +193,7 @@ impl Agent {
         }
     }
 
-    pub async fn get_by_id(&self,id: RecordId) -> Result<AgentData, String> {
+    pub async fn get(&self,id: RecordId) -> Result<AgentData, String> {
 
         match self.db.client.select::<Option<AgentData>>(id.clone()).await {
             Ok(data) => {
@@ -296,17 +296,37 @@ impl Agent {
     }
 
     pub async fn update_by_id(&self,id: RecordId, data:AgentData) -> Result<AgentData,String> {
-        match self.db.client.update::<Option<AgentData>>(id).merge(data.clone()).await {
-            Ok(response) => {
-                if let Some(data) = response {
-                    return Ok(data);
+        match self.get(id.clone()).await  {
+            Ok(record)=> {
+                let data: AgentData = AgentData {                            
+                    name: if data.name.is_none() { record.name } else { data.name },
+                    server: if data.server.is_none() { record.server } else {data.server },
+                    parent: if data.parent.is_none() { record.parent } else {data.parent },
+                    kind: if data.kind.is_none() { record.kind } else {data.kind },
+                    queue_id: if data.queue_id.is_none() { record.queue_id } else {data.queue_id },
+                    status: if data.status.is_none() { record.status } else {data.status },
+                    message: if data.message.is_none() { record.message } else {data.message },
+                    author: if data.author.is_none() { record.author } else {data.author },
+                    command: if data.command.is_none() { record.command } else {data.command },
+                    command_is_executed: if data.command_is_executed.is_none() { record.command_is_executed } else {data.command_is_executed },
+                    runtime_id: if data.runtime_id.is_none() { record.runtime_id } else {data.runtime_id },
+                    date_modified: Utc::now(),
+                    ..Default::default()
+                };
+                match self.db.client.update::<Option<AgentData>>(id).content(data.clone()).await {
+                    Ok(response) => {
+                        if let Some(data) = response {
+                            return Ok(data);
+                        }
+                        Err(format!("agent {} under server {} not found",data.name.unwrap(),data.server.unwrap()))
+                    }
+                    Err(error) => {
+                        error!("{}",error);
+                        Err(format!("unable to update agent {} under server {}",data.name.unwrap(),data.server.unwrap()))
+                    }
                 }
-                Err(format!("agent {} under server {} not found",data.name.unwrap(),data.server.unwrap()))
             }
-            Err(error) => {
-                error!("{}",error);
-                Err(format!("unable to update agent {} under server {}",data.name.unwrap(),data.server.unwrap()))
-            }
+            Err(error) => Err(error.to_string())
         }
     }
 
@@ -392,7 +412,6 @@ impl Agent {
             }
             Err(error) => {
                 error!("{}",error);
-                println!("{:?}",error);
                 Err(format!("unable to register agent {} at server {}",data.name.unwrap(),data.server.unwrap()))
             }
         }
