@@ -110,6 +110,7 @@ pub struct AgentFilter {
     pub status: Option<AgentStatus>,
     pub statuses: Option<Vec<AgentStatus>>,
     pub command: Option<Command>,
+    pub commands: Option<Vec<Command>>,
     pub command_is_executed: Option<bool>,
     pub message: Option<String>,
 }
@@ -192,7 +193,8 @@ impl Agent {
             }
         }
     }
-
+    
+    
     pub async fn get(&self,id: RecordId) -> Result<AgentData, String> {
 
         match self.db.client.select::<Option<AgentData>>(id.clone()).await {
@@ -205,6 +207,26 @@ impl Agent {
             Err(error) => {
                 error!("{}",error);
                 Err(format!("database error when retrieving agent data with id: {:?}",id))
+            }
+        }
+    }
+    pub async fn get_by_name(&self,name: String) -> Result<AgentData, String> {
+
+        println!("name: {}",name);
+        match self.db.client.query("SELECT * FROM type::table($table) WHERE name=$name")
+        .bind(("table",self.table.clone()))
+        .bind(("name",name.clone())).await {
+            Ok(mut response) => {
+                if let Ok(data) = response.take::<Option<AgentData>>(0) {
+                    if let Some(item) = data {
+                        return Ok(item);
+                    }
+                }
+                return Err(format!("unable to find agent with name: {:?}",name));
+            }
+            Err(error) => {
+                error!("{}",error);
+                Err(format!("database error when retrieving agent data with name: {:?}",name))
             }
         }
     }
@@ -244,6 +266,9 @@ impl Agent {
         if filters.statuses.is_some() {
             where_stmt.push("status IN $statuses".to_string());
         }
+        if filters.commands.is_some() {
+            where_stmt.push("command IN $commands".to_string());
+        }
         if !where_stmt.is_empty() {
             stmt = format!("{} WHERE {}",stmt,where_stmt.join(" AND "));
         }
@@ -280,6 +305,9 @@ impl Agent {
         }
         if let Some(values) = filters.statuses {
             query = query.bind(("statuses",values));
+        }
+        if let Some(values) = filters.commands {
+            query = query.bind(("commands",values));
         }
         match query.await {
             Ok(mut response) => {
@@ -327,6 +355,29 @@ impl Agent {
                 }
             }
             Err(error) => Err(error.to_string())
+        }
+    }
+
+    pub async fn send_command(&self,id: RecordId, command:Command, message: Option<String>, author: Option<String>) -> Result<AgentData,String> {
+
+        let data: AgentData = AgentData {                            
+            command: Some(command),
+            command_is_executed: Some(false),
+            message,
+            author,
+            ..Default::default()
+        };
+        match self.db.client.update::<Option<AgentData>>(id).merge(data.clone()).await {
+            Ok(response) => {
+                if let Some(data) = response {
+                    return Ok(data);
+                }
+                Err(format!("agent record not found"))
+            }
+            Err(error) => {
+                error!("{}",error);
+                Err(format!("unable to send command to agent"))
+            }
         }
     }
 

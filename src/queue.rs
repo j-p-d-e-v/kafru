@@ -231,6 +231,29 @@ impl<'a> Queue<'a>{
         }
     }
     
+    pub async fn set_status(&self, id: RecordId, status: QueueStatus, message: Option<String> ) -> Result<QueueData,String> {
+        match self.get(id.clone()).await {
+            Ok(record)=> {
+                let data: QueueData = QueueData {  
+                    status: Some(status),                          
+                    date_modified: Some(Utc::now()),  
+                    message,
+                    ..record
+                };
+                match self.db.client.update::<Option<QueueData>>(id).content(data).await {
+                    Ok(result) => {
+                        if let Some(record) = result {
+                            return Ok(record);
+                        }
+                        Err("unable to update record".to_string())
+                    }
+                    Err(error) => Err(error.to_string())
+                }
+            }
+            Err(error) => Err(error.to_string())
+        }
+    }
+    
     /// Updates information for a specific queue record.
     ///
     /// # Parameters
