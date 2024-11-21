@@ -97,21 +97,34 @@ mod test_worker {
                         previous_count = data.len();
                     }
                     if data.len() == 0 {
-                        assert!(true);
-                        break;
+                        if let Ok(remove_data) = agent.list(AgentFilter {
+                            kind: Some(AgentKind::Task),
+                            commands: Some(Vec::from([Command::TaskRemove])),
+                            ..Default::default()
+                        }).await {
+                            if remove_data.len() == 0 {
+                                assert!(true);
+                                break;
+                            }
+                            for _ in remove_data {
+                                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            }
+                        }
                     }
-                    //for item in data {
-                    //    let random_number = rand::thread_rng().gen_range(Range{start:1000, end:3000});
-                    //    if random_number % 2 == 0  {
-                    //        if let Err(error) = agent.update_by_id(item.id.clone().unwrap(), AgentData {
-                    //            command: Some(
-                    //                Command::TaskTerminate),
-                    //            ..Default::default()
-                    //        }).await {
-                    //            assert!(false,"unable to update command: {}",error);
-                    //        }
-                    //    }
-                    //}
+                    else {
+                        for item in data {
+                            let random_number = rand::thread_rng().gen_range(Range{start:1000, end:3000});
+                            if random_number % 2 == 0  {
+                                if let Err(error) = agent.update_by_id(item.id.clone().unwrap(), AgentData {
+                                    command: Some(
+                                        Command::TaskTerminate),
+                                    ..Default::default()
+                                }).await {
+                                    assert!(false,"unable to update command: {}",error);
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(error)  => {
                     assert!(false,"unable to send command: {}",error);
