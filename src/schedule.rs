@@ -171,12 +171,10 @@ impl<'a> Schedule<'a>{
             bindings.insert("name", Value::Array(values));
             stmt_where.push("name IN $name");
         }
-        
         if let Some(start_schedule) = conditions.start_schedule {
             bindings.insert("start_schedule", Value::String(start_schedule.to_rfc3339()));
             stmt_where.push("start_schedule <= $start_schedule");
         }
-        
         if let Some(until_schedule) = conditions.until_schedule {
             bindings.insert("until_schedule", Value::String(until_schedule.to_rfc3339()));
             stmt_where.push("until_schedule >= $until_schedule");

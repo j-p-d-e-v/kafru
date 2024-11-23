@@ -54,7 +54,7 @@ pub struct AgentData {
     #[serde(skip_serializing_if="Option::is_none")]
     pub id: Option<RecordId>,
     #[serde(skip_serializing_if="Option::is_none")]
-    pub parent: Option<RecordId>,
+    pub parent_id: Option<RecordId>,
     #[serde(skip_serializing_if="Option::is_none")]
     pub queue_id: Option<RecordId>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -82,7 +82,7 @@ impl Default for AgentData {
     fn default() -> Self {
         Self {
             id: None,
-            parent: None,
+            parent_id: None,
             queue_id: None,
             name: None,
             kind: None,
@@ -101,9 +101,10 @@ impl Default for AgentData {
 #[derive(Debug,Clone,Deserialize,Serialize, Default)]
 pub struct AgentFilter {
     pub id: Option<RecordId>,
-    pub parent: Option<RecordId>,
+    pub parent_id: Option<RecordId>,
     pub queue_id: Option<RecordId>,
     pub name: Option<String>,
+    pub names: Option<Vec<String>>,
     pub kind: Option<AgentKind>,
     pub server: Option<String>,
     pub runtime_id: Option<u64>,
@@ -178,11 +179,11 @@ impl Agent {
         match self.db.client.delete::<Option<AgentData>>(id.clone()).await {
             Ok(_) => {
                 if include_related {
-                    if let Err(error) = self.db.client.query("DELETE FROM type::table($table) WHERE type::thing(parent)=$parent")
+                    if let Err(error)  = self.db.client.query("DELETE FROM type::table($table) WHERE parent_id=type::thing($parent_id)")
                     .bind(("table",self.table.clone()))
-                    .bind(("parent",id.clone())).await {
+                    .bind(("parent_id",id.clone())).await {
                         error!("{}",error);
-                        return Err(format!("database error when deleting related data of agent data with id: {:?}",id));
+                        return Err(format!("database error when deleting related data of agent data with id: {:?}",id));    
                     }
                 }
                 Ok(true)
@@ -210,23 +211,22 @@ impl Agent {
             }
         }
     }
-    pub async fn get_by_name(&self,name: String) -> Result<AgentData, String> {
-
-        println!("name: {}",name);
-        match self.db.client.query("SELECT * FROM type::table($table) WHERE name=$name")
+    pub async fn get_by_name(&self,name: String,server: String) -> Result<AgentData, String> {
+        match self.db.client.query("SELECT * FROM type::table($table) WHERE name=$name AND server=$server")
         .bind(("table",self.table.clone()))
-        .bind(("name",name.clone())).await {
+        .bind(("name",name.clone()))
+        .bind(("server",server.clone())).await {
             Ok(mut response) => {
                 if let Ok(data) = response.take::<Option<AgentData>>(0) {
                     if let Some(item) = data {
                         return Ok(item);
                     }
                 }
-                return Err(format!("unable to find agent with name: {:?}",name));
+                return Err(format!("unable to find agent with name: {}, server: {}",name, server));
             }
             Err(error) => {
                 error!("{}",error);
-                Err(format!("database error when retrieving agent data with name: {:?}",name))
+                Err(format!("database error when retrieving agent data with name:{}, server: {}",name, server))
             }
         }
     }
@@ -239,8 +239,8 @@ impl Agent {
         if filters.id.is_some() {
             where_stmt.push("type::thing(id)=$id".to_string());
         }
-        if filters.parent.is_some() {
-            where_stmt.push("type::thing(parent)=$parent".to_string());
+        if filters.parent_id.is_some() {
+            where_stmt.push("parent_id=type::thing($parent_id)".to_string());
         }
         if filters.command.is_some() {
             where_stmt.push("command=$command".to_string());
@@ -269,18 +269,22 @@ impl Agent {
         if filters.commands.is_some() {
             where_stmt.push("command IN $commands".to_string());
         }
+        if filters.names.is_some() {
+            where_stmt.push("name IN $names".to_string());
+        }
         if !where_stmt.is_empty() {
             stmt = format!("{} WHERE {}",stmt,where_stmt.join(" AND "));
         }
 
         // VALUE Binding
+        println!("stmt: {}",stmt);
         let mut query = self.db.client.query(stmt).bind(("table",self.table.clone()));
         
         if let Some(value) = filters.id {
             query = query.bind(("id",value));
         }
-        if let Some(value) = filters.parent {
-            query = query.bind(("parent",value));
+        if let Some(value) = filters.parent_id {
+            query = query.bind(("parent_id",value));
         }
         if let Some(value) = filters.command {
             query = query.bind(("command",value));
@@ -309,6 +313,9 @@ impl Agent {
         if let Some(values) = filters.commands {
             query = query.bind(("commands",values));
         }
+        if let Some(values) = filters.names {
+            query = query.bind(("names",values));
+        }
         match query.await {
             Ok(mut response) => {
                 if let Ok(data) =  response.take::<Vec<AgentData>>(0) {
@@ -329,7 +336,7 @@ impl Agent {
                 let data: AgentData = AgentData {                            
                     name: if data.name.is_none() { record.name } else { data.name },
                     server: if data.server.is_none() { record.server } else {data.server },
-                    parent: if data.parent.is_none() { record.parent } else {data.parent },
+                    parent_id: if data.parent_id.is_none() { record.parent_id } else {data.parent_id },
                     kind: if data.kind.is_none() { record.kind } else {data.kind },
                     queue_id: if data.queue_id.is_none() { record.queue_id } else {data.queue_id },
                     status: if data.status.is_none() { record.status } else {data.status },
@@ -382,11 +389,11 @@ impl Agent {
     }
 
     
-    pub async fn update_by_parent_id(&self,parent: RecordId, data:AgentData) -> Result<AgentData,String> {
-        let stmt: String = "SELECT * FROM type::table($table) WHERE type::thing(parent)=$parent and runtime_id=$runtime_id".to_string();
+    pub async fn update_by_parent_id(&self,parent_id: RecordId, data:AgentData) -> Result<AgentData,String> {
+        let stmt: String = "SELECT * FROM type::table($table) WHERE parent_id=type::thing($parent_id) and runtime_id=$runtime_id".to_string();
         match self.db.client.query(stmt)
         .bind(("table",self.table.clone()))
-        .bind(("parent",parent))
+        .bind(("parent_id",parent_id))
         .bind(("runtime_id",data.runtime_id.clone())).await {
             Ok(mut response) => {
                 if let Ok(agent_data) = response.take::<Option<AgentData>>(0) {
