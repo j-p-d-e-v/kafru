@@ -597,5 +597,29 @@ impl Agent {
             }
         }
     }
+
+    
+    /// Converts a Tokio task ID into a `u64` value.
+    ///
+    /// # Arguments
+    /// * `id` - The Tokio task ID to be converted.
+    ///
+    /// # Returns
+    /// A `u64` representation of the given task ID.
+    pub async fn to_id(id: tokio::task::Id) -> u64 {
+        id.to_string().parse::<u64>().unwrap()
+    }
+
+    /// Generates a unique name for a task.
+    ///
+    /// # Arguments
+    /// * `queue_name` - A reference to the name of the queue the task belongs to.
+    /// * `task_id` - A unique identifier for the task.
+    ///
+    /// # Returns
+    /// A string combining the queue name and task ID in the format `{queue_name}-{task_id}`.
+    pub async fn to_name(queue_name: &String, task_id: &u64) -> String {
+        format!("{}-{}", queue_name, task_id)
+    }
 }
 

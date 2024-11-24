@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod test_command {
+    use crate::agent::Agent;
     use crate::tests::test_helper::configure_database_env;
     use crate::schedule::{Schedule, ScheduleData, ScheduleStatus};
     use crate::scheduler::Scheduler;
@@ -17,7 +18,6 @@ mod test_command {
     use std::ops::Range;
     use std::collections::HashMap;
     use serde_json::{Value, Number};
-    use crossbeam::channel::bounded;
     use crate::Command;
     use crate::database::Db;
     use std::sync::Arc;
@@ -25,20 +25,20 @@ mod test_command {
     #[tokio::test]
     async fn test_scheduler(){
         configure_database_env();
+        let server: String = "server1".to_string();
         let db_instance = Db::new(None).await;
         assert!(db_instance.is_ok(),"{:?}",db_instance.err());
         let db: Arc<Db> = Arc::new(db_instance.unwrap());
         let schedule: Schedule = Schedule::new(Some(db.clone())).await;
+        let agent: Agent = Agent::new(Some(db.clone())).await;
         // Purge schedules
         let result: Result<u64, String> = schedule.purge().await;
         assert!(result.is_ok(),"{}",result.unwrap_err());
-        
-
         //Create sample schedules
         for i in 1..11 {
             let result: Result<ScheduleData, String> = schedule.create(ScheduleData {
                 name: Some(format!("{} - {}",i,Name().fake::<String>())),
-                queue: Some("default".to_string()),
+                queue: Some(format!("{}-default",&server)),
                 cron_expression: Some(CronSchedule::new().set_minute(format!("*/{}",i))),
                 handler:Some("mytesthandler".to_string()),
                 start_schedule: Utc::now().checked_sub_days(Days::new(1)),
@@ -59,20 +59,22 @@ mod test_command {
             }).await;
             assert!(result.is_ok(),"{}",result.unwrap_err());
         }
-        let  (tx, rx) = bounded::<Command>(1);
-        let scheduler  = Scheduler::new(rx.clone(),Some(db.clone())).await;
-        let task = tokio::task::spawn(async {
-            let result = scheduler.watch(Some("kafru_test_scheduler".to_string()), Some(2)).await;
+        let _server = server.clone();
+        let task = tokio::task::spawn(async move {
+            let scheduler  = Scheduler::new(Some(db.clone()),_server,"schedulerman".to_string()).await;
+            let result = scheduler.watch(Some("scheduler-default".to_string()), Some(2)).await;
             assert!(result.is_ok(),"{:?}",result.unwrap_err());    
         });
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         for command in [
-            Command::SchedulerPause,
-            Command::SchedulerResume,
+            Command::SchedulerGracefulShutdown,
             Command::SchedulerForceShutdown
         ] {        
-            let result = tx.send(command);
-            assert!(result.is_ok(),"{}",result.unwrap_err());
-            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+            let queue_agent = agent.get_by_name(format!("{}-scheduler-default-0",server.clone()),server.clone()).await;
+            assert!(queue_agent.is_ok(),"{:?}",queue_agent.err());
+            let result = agent.send_command(queue_agent.clone().unwrap().id.unwrap(), command, None, Some("test dela cruz".to_string())).await;
+            assert!(result.is_ok(),"{:?}",result.unwrap_err());
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
         task.await.unwrap();
     }

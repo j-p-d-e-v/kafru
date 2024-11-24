@@ -33,14 +33,9 @@ pub mod tests;
 // Agent for sending commands/signals to worker agent, scheduler agent
 pub mod agent;
 
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 /// The available commands that can be send to scheduler and worker.
 pub enum Command {
-    /// Resumes the paused scheduler.
-    SchedulerResume,
-    /// Suspend/Pause the scheduler.
-    SchedulerPause,
     /// Force shutdown the scheduler, it will not wait for the execution to complete.
     SchedulerForceShutdown,
     /// Force shutdown the scheduler, it will wait for the execution to complete.
@@ -54,9 +49,3 @@ pub enum Command {
     /// Remove a Task.
     TaskRemove,
 }
-
-//todo!("Replace command of Workers,Scheduler instead from TX/RX to SurrealDB Based Add Queue command");
-//todo!("We can use task id to directly identify and abort a specific thread/task.");
-//todo!("Create a global variable to hold the task id (possibly v)");
-//todo!("Put the command in database for scalability");
-//todo!("For Scability the kafru instance should have an identifier so we can target specific workers, queues, and scheduler when running multiple instances");
