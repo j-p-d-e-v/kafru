@@ -23,6 +23,7 @@ mod test_scheduler {
     use crate::agent::Agent;
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_shutdown(){
         configure_database_env();
         let db_instance = Db::new(None).await;

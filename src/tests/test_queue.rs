@@ -18,6 +18,7 @@ mod test_queue {
     use std::sync::Arc;
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_update_remove(){
         configure_database_env();
         let db_instance = Db::new(None).await;
@@ -65,6 +66,7 @@ mod test_queue {
         assert!(result.is_ok(),"{}",result.unwrap_err());
     }
     #[tokio::test]
+    #[serial_test::serial]
     pub async fn test_list_purge(){
         configure_database_env();
         let db_instance = Db::new(None).await;

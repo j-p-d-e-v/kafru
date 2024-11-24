@@ -43,6 +43,7 @@ mod test_manager {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test(){
         tracing_subscriber::fmt::init();
         configure_database_env();
