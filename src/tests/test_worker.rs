@@ -41,6 +41,7 @@ mod test_worker {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_watcher_graceful_shutdown(){
         configure_database_env();
         let server: String = "server1".to_string();
@@ -91,6 +92,7 @@ mod test_worker {
         let _ = tokio::join!(tasks);
     }
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_watcher_force_shutdown(){
         configure_database_env();
         let server: String = "server2".to_string();
@@ -142,6 +144,7 @@ mod test_worker {
     }
     
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_watcher_task_terminate(){
         configure_database_env();
         let server: String = "server3".to_string();

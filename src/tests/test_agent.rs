@@ -7,6 +7,7 @@ pub mod test_agent {
     use crate::database::Db;
 
     #[tokio::test]
+    #[serial_test::serial]
     pub async fn test() {
         configure_database_env();
         let db: Arc<Db> = Arc::new(

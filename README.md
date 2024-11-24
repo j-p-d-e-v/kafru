@@ -27,7 +27,7 @@ cargo add kafru
 For testing, you can start SurrealDB using an in-memory database:
 
 ```bash
-cargo test -- --nocapture --test-threads=1
+cargo test -- --nocapture
 ```
 
 ```bash
@@ -122,9 +122,23 @@ To execute tasks using both the worker (watcher) and the scheduler, follow these
 use std::sync::Arc;
 use kafru::manager::Manager;
 use kafru::task::TaskRegistry;
+use std::sync::Arc;
+use crate::database::Db;
+
+// Initialize database instance
+let db_instance = Db::new(None).await;
+
+// Wrap the database instance in an Arc
+let db: Arc<Db> = Arc::new(db_instance.unwrap());
+
+// Declare the server e.g. MYLOCALHOSTABC
+let server: String = "MYLOCALHOSTABC".to_string();
+
+// Declare the author name.
+let author: String = "Juan dela Cruz".to_string();
 
 // Initialize the Manager struct.
-let mut manager: Manager = Manager::new().await;
+let mut manager = Manager::new(server.clone(),author.clone()).await;
 
 // Initialize the Task Registry struct and register the task.
 let mut task_registry: TaskRegistry = TaskRegistry::new().await;
@@ -137,15 +151,37 @@ task_registry.register("mytesthandler".to_string(), || {
 // Share the task_registry using Arc for thread safety.
 let task_registry: Arc<TaskRegistry> = Arc::new(task_registry);
 
-// Run the Worker, specifying the queue name, number of threads, the task registry, and task poll interval (in seconds).
-let _ = manager.worker("default".to_string(), 5, task_registry.clone(), 15).await;
+// Run the Worker, specifying the queue name, number of threads, the task registry, task poll interval (in seconds), and a database arc clone.
+let _ = manager.worker("worker-default".to_string(), 5, task_registry.clone(), 15, Some(db.clone())).await;
 
-// (Optional) Run the Scheduler by specifying the scheduler name and interval (in seconds).
-let _ = manager.scheduler("kafru_test_scheduler".to_string(), 5).await;
+// (Optional) Run the Scheduler by specifying the scheduler name, interval (in seconds), and a database arc clone.
+let _ = manager.scheduler("scheduler-default".to_string(), 5, Some(db.clone())).await;
 
 // Optionally, wait for both the worker and scheduler to finish. This will prevent the function from exiting prematurely.
 let _ = manager.wait().await;
+
 ```
+
+To send command to the scheduler, queue worker, and task.
+```rust
+use crate::agent::Agent;
+use std::sync::Arc;
+use crate::database::Db;
+use crate::Command;
+
+let author: String = "Juan dela Cruz".to_string();
+let server: String = "MYLOCALHOSTABC".to_string();
+let agent_name = Agent::to_name(server.clone(),"worker-default-0").await;
+let agent_data = agent.get_by_name(agent_name,server.clone()).await?;
+let agent_id = agent_data.id.unwrap();
+let command = Command::QueueGracefulShutdown;
+let message: String =  "test dela cruz".to_string();
+let result = agent.send_command(agent_id, command, Some(author),Some(message)).await;
+assert!(result.is_ok(),"{:?}",result.unwrap_err());
+```
+## More Examples
+
+For more examples, you can go to: ```src/test/``` directory.
 
 ---
 

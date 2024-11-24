@@ -1,6 +1,6 @@
 
 #[cfg(test)]
-mod test_task {
+mod test_task_handler {
     use async_trait::async_trait;
     use crate::task::{
         TaskHandler,

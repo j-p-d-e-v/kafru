@@ -23,6 +23,7 @@ mod test_command {
     use std::sync::Arc;
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scheduler(){
         configure_database_env();
         let server: String = "server1".to_string();
