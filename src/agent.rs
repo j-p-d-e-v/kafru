@@ -64,7 +64,7 @@ pub struct AgentData {
     #[serde(skip_serializing_if="Option::is_none")]
     pub server: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    pub runtime_id: Option<u64>,
+    pub task_id: Option<u64>,
     #[serde(skip_serializing_if="Option::is_none")]
     pub status: Option<AgentStatus>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -87,7 +87,7 @@ impl Default for AgentData {
             name: None,
             kind: None,
             server: None,
-            runtime_id: None,
+            task_id: None,
             status: None,
             command: None,
             command_is_executed: None,
@@ -107,7 +107,7 @@ pub struct AgentFilter {
     pub names: Option<Vec<String>>,
     pub kind: Option<AgentKind>,
     pub server: Option<String>,
-    pub runtime_id: Option<u64>,
+    pub task_id: Option<u64>,
     pub status: Option<AgentStatus>,
     pub statuses: Option<Vec<AgentStatus>>,
     pub command: Option<Command>,
@@ -277,7 +277,6 @@ impl Agent {
         }
 
         // VALUE Binding
-        println!("stmt: {}",stmt);
         let mut query = self.db.client.query(stmt).bind(("table",self.table.clone()));
         
         if let Some(value) = filters.id {
@@ -330,7 +329,7 @@ impl Agent {
         }
     }
 
-    pub async fn update_by_id(&self,id: RecordId, data:AgentData) -> Result<AgentData,String> {
+    pub async fn update(&self,id: RecordId, data:AgentData) -> Result<AgentData,String> {
         match self.get(id.clone()).await  {
             Ok(record)=> {
                 let data: AgentData = AgentData {                            
@@ -344,7 +343,7 @@ impl Agent {
                     author: if data.author.is_none() { record.author } else {data.author },
                     command: if data.command.is_none() { record.command } else {data.command },
                     command_is_executed: if data.command_is_executed.is_none() { record.command_is_executed } else {data.command_is_executed },
-                    runtime_id: if data.runtime_id.is_none() { record.runtime_id } else {data.runtime_id },
+                    task_id: if data.task_id.is_none() { record.task_id } else {data.task_id },
                     date_modified: Utc::now(),
                     ..Default::default()
                 };
@@ -388,44 +387,6 @@ impl Agent {
         }
     }
 
-    
-    pub async fn update_by_parent_id(&self,parent_id: RecordId, data:AgentData) -> Result<AgentData,String> {
-        let stmt: String = "SELECT * FROM type::table($table) WHERE parent_id=type::thing($parent_id) and runtime_id=$runtime_id".to_string();
-        match self.db.client.query(stmt)
-        .bind(("table",self.table.clone()))
-        .bind(("parent_id",parent_id))
-        .bind(("runtime_id",data.runtime_id.clone())).await {
-            Ok(mut response) => {
-                if let Ok(agent_data) = response.take::<Option<AgentData>>(0) {
-                    match agent_data  {
-                        Some(item) => {
-                            match self.db.client.update::<Option<AgentData>>(item.id.unwrap()).content(data.clone()).await {
-                                Ok(response) => {
-                                    if let Some(data) = response {
-                                        return Ok(data);
-                                    }
-                                    return Err(format!("agent {} under server {} not found",&data.name.unwrap(),&data.server.unwrap()));
-                                }
-                                Err(error) => {
-                                    error!("{}",error);
-                                    return Err(format!("unable to update agent {} under server {}",&item.name.unwrap(),&item.server.unwrap()));
-                                }
-                            }
-                        }
-                        None => {
-                            return Err(format!("query for agent {} under server {} returns nothing",&data.name.unwrap(),&data.server.unwrap()));                            
-                        }
-                    }
-                }
-                Err(format!("database error for agent {} under server {}",&data.name.unwrap(),&data.server.unwrap()))       
-            }
-            Err(error) =>{
-                error!("{}",error);
-                Err(format!("database error for agent {} under server {}",&data.name.unwrap(),&data.server.unwrap()))
-            }
-        }
-    }
-
     pub async fn register(&self, mut data: AgentData) -> Result<AgentData,String>{
         if let Some(value) = data.name.clone() {
             if value.len() < 3 {
@@ -438,8 +399,8 @@ impl Agent {
         if data.kind.is_none() {
             return Err("kind is required".to_string())
         }
-        if data.runtime_id == Some(0) && data.kind == Some(AgentKind::Task) {
-            return Err(format!("runtime_id must be greater than 0 for task got {}",data.runtime_id.unwrap()));
+        if data.task_id == Some(0) && data.kind == Some(AgentKind::Task) {
+            return Err(format!("task_id must be greater than 0 for task got {}",data.task_id.unwrap()));
         }
         if data.server.is_none() {
             return Err(format!("server is required"));
@@ -507,12 +468,12 @@ pub mod test_agent {
                     name: Some(format!("queue-{}-server-{}",i,s)),
                     kind: Some(AgentKind::Queue),
                     server: Some(server.clone()),
-                    runtime_id: Some(i),
+                    task_id: Some(i),
                     ..Default::default()
                 }).await;
                 assert!(result.is_ok(),"{:?}",result.err());
                 let data = result.unwrap();
-                let updated_result = agent.update_by_id(data.id.clone().unwrap(), AgentData {
+                let updated_result = agent.update(data.id.clone().unwrap(), AgentData {
                     status: Some(AgentStatus::Completed),
                     ..data
                 } ).await;
