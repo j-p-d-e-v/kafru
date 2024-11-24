@@ -263,8 +263,7 @@ impl Worker {
             .worker_threads(num_threads)
             .enable_all()
             .build() {
-            Ok(runtime) => {
-                // todo!("Document");                
+            Ok(runtime) => {              
                 let mut worker_tasks: WorkerTasks = WorkerTasks::new().await;
                 let queue_agent: AgentData = self.agent.register(AgentData {
                     name: Some(WorkerTasks::to_name(&queue_name, &0).await),
