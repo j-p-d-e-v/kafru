@@ -4,8 +4,6 @@ use crate::task::TaskRegistry;
 use std::sync::Arc;
 use crate::worker::Worker;
 use tokio::task::JoinSet;
-use crossbeam::channel::{Sender, Receiver};
-use crate::Command;
 use crate::database::Db;
 
 #[derive(Debug)]
@@ -51,9 +49,11 @@ impl Manager {
     /// - `scheduler_name`: the name of the scheduler.
     /// - `poll_interval`: the value in seconds on how long polling will pause.
     /// - `receiver`: a channel crossbeam channel ```Receiver```.
-    pub async fn scheduler(&mut self, scheduler_name: String, poll_interval: u64, receiver: Receiver<Command>,db: Option<Arc<Db>>) -> Result<(),String> {
+    pub async fn scheduler(&mut self, scheduler_name: String, poll_interval: u64, db: Option<Arc<Db>>) -> Result<(),String> {
+        let server: String = self.server.clone();
+        let author: String = self.author.clone();
         self.join_set.spawn( async move {
-            let scheduler  = Scheduler::new(receiver.clone(),db.clone()).await;
+            let scheduler  = Scheduler::new(db.clone(),server,author).await;
             let _ = scheduler.watch(Some(scheduler_name), Some(poll_interval)).await;
         });
         Ok(())
@@ -62,13 +62,6 @@ impl Manager {
     /// Waits for the scheduler and worker to complete their tasks.
     pub async fn wait(self) -> Vec<()> {
         self.join_set.join_all().await
-    }
-
-    pub async fn send_command(&self, command: Command, sender: Sender<Command>) -> Result<bool,String> {
-        if let Err(error) = sender.send(command) {
-            return Err(error.to_string());
-        }
-        Ok(true)
     }
 
 }

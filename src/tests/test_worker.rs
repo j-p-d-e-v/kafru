@@ -92,7 +92,6 @@ mod test_worker {
     }
     #[tokio::test]
     async fn test_watcher_force_shutdown(){
-        tracing_subscriber::fmt::init();
         configure_database_env();
         let server: String = "server2".to_string();
         let db_instance = Db::new(None).await;
