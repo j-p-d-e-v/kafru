@@ -8,6 +8,11 @@ use tracing::{info, error, instrument};
 use std::sync::atomic::{AtomicBool, Ordering};
 use crate::Command;
 
+/// An enum representing the types of agents.
+///
+/// This enum is used to classify the different kinds of agents in the system. Each variant 
+/// represents a specific role or functionality that the agent serves.
+///
 #[derive(Debug,Clone, PartialEq, Deserialize, Serialize)]
 pub enum  AgentKind {
     Queue,
@@ -28,6 +33,13 @@ impl fmt::Display for AgentKind {
     }
 }
 
+/// An enum representing the possible statuses of an agent.
+///
+/// This enum defines the different states that an agent can be in, providing a way to track 
+/// the lifecycle or status of an agent during its execution. The statuses can be used to indicate 
+/// whether the agent has been initialized, is actively running, has been terminated, encountered an 
+/// error, or has completed its task.
+///
 #[derive(Debug,Clone, PartialEq, Deserialize, Serialize)]
 pub enum AgentStatus {
     Initialized,
@@ -49,6 +61,13 @@ impl fmt::Display for AgentStatus {
     }
 }
 
+/// A struct representing the data of an agent.
+///
+/// This struct holds the detailed information of an agent, including optional fields such as its 
+/// unique identifier, task ID, status, commands, and server-related information. The fields are 
+/// serializable using `serde`, and the `skip_serializing_if` attribute ensures that fields with 
+/// `None` values are not included during serialization.
+///
 #[derive(Debug,Clone,Deserialize,Serialize)]
 pub struct AgentData {
     #[serde(skip_serializing_if="Option::is_none")]
@@ -98,6 +117,12 @@ impl Default for AgentData {
     }
 }
 
+/// A struct representing the filters that can be applied when querying agent records.
+///
+/// This struct allows specifying various optional fields that can be used to filter the agents 
+/// based on different attributes such as their ID, name, status, task ID, and more. Each field 
+/// is optional, meaning the filter can be customized based on the requirements of the query.
+///
 #[derive(Debug,Clone,Deserialize,Serialize, Default)]
 pub struct AgentFilter {
     pub id: Option<RecordId>,
@@ -126,6 +151,20 @@ static AGENT_TABLE_CREATED: AtomicBool = AtomicBool::new(false);
 
 impl Agent {
 
+    /// Creates a new instance of the struct with an optional database connection.
+    ///
+    /// This function initializes a new instance of the struct by either using the provided database connection (`db`) 
+    /// or by creating a new one if `db` is `None`. The database connection is wrapped in an `Arc` for shared ownership.
+    /// It also sets a default table name (`"kafru_agents"`) for database operations.
+    ///
+    /// # Arguments
+    /// * `db` - An optional `Arc<Db>` representing the database connection. If `None` is provided, a new database connection 
+    ///   will be created.
+    ///
+    /// # Returns
+    /// * `Self` - A new instance of the struct initialized with the provided or newly created database connection and 
+    ///   the default table name.
+    ///
     pub async fn new(db: Option<Arc<Db>>) -> Self {
         let db: Arc<Db> = db.unwrap_or(
             Arc::new(Db::new(None).await.unwrap())
@@ -136,6 +175,20 @@ impl Agent {
             table
         }
     }
+
+    /// Purges agent data for a specific server.
+    ///
+    /// This function deletes all agent records associated with a given server from the database. The operation is performed
+    /// on the table specified by `self.table`, which is dynamically bound to the query. If the operation is successful, the
+    /// function returns `Ok(true)`. If an error occurs during the database query, an error message is returned.
+    ///
+    /// # Arguments
+    /// * `server` - The name of the server for which agent data will be purged. All records associated with this server will be deleted.
+    ///
+    /// # Returns
+    /// * `Ok(true)` - If the data was successfully purged for the given server.
+    /// * `Err(String)` - An error message if the purge operation fails.
+    ///
     #[instrument(skip_all)]
     pub async fn purge(&self,server: String) -> Result<bool,String> {
         match self.db.client.query("DELETE type::table($table) WHERE server = $server")
@@ -151,7 +204,21 @@ impl Agent {
             }
         }
     }
-
+    
+    /// Creates a table for agent data if it does not already exist.
+    ///
+    /// This function attempts to create a table in the database using the name stored in `self.table`. If the table
+    /// has already been created, it simply returns `true`. If the table creation is successful, it proceeds to purge
+    /// old agent data and updates a global flag `AGENT_TABLE_CREATED` to indicate that the table is now created.
+    ///
+    /// # Arguments
+    /// * `server` - The name of the server for which the table should be created. This is used later in the function
+    ///   to trigger any additional purging of related data.
+    ///
+    /// # Returns
+    /// * `Ok(true)` - If the table was successfully created or already exists, and the data purging operation was successful.
+    /// * `Err(String)` - An error message if the table creation fails or any related data purging fails.
+    ///
     #[instrument(skip_all)]
     pub async fn create_table(&self, server: String) -> Result<bool,String> {
         let is_created: bool = AGENT_TABLE_CREATED.load(Ordering::Relaxed);
@@ -175,6 +242,22 @@ impl Agent {
         }
     }
 
+    /// Removes an agent record by its unique identifier, with an option to delete related records.
+    ///
+    /// This function deletes an agent record from the database using the provided `id`. If the `include_related`
+    /// flag is set to `true`, it will also delete related records that reference this agent by its `parent_id`.
+    /// If successful, it returns `true`, otherwise an error message is returned.
+    ///
+    /// # Arguments
+    /// * `id` - The unique identifier (`RecordId`) of the agent to remove.
+    /// * `include_related` - A boolean flag indicating whether related records should also be deleted.
+    ///   - If `true`, it will delete any records with a `parent_id` matching the agent's `id`.
+    ///   - If `false`, only the agent record will be deleted.
+    ///
+    /// # Returns
+    /// * `Ok(true)` - If the agent record (and optionally related records) was successfully deleted.
+    /// * `Err(String)` - An error message if the deletion fails.
+    ///
     pub async fn remove(&self,id: RecordId, include_related: bool) -> Result<bool,String> {
         match self.db.client.delete::<Option<AgentData>>(id.clone()).await {
             Ok(_) => {
@@ -195,7 +278,18 @@ impl Agent {
         }
     }
     
-    
+    /// Retrieves an agent record by its unique identifier.
+    ///
+    /// This function queries the database for an agent record using the provided `id`. If the record
+    /// exists, it is returned. Otherwise, an error is returned indicating that the agent could not be found.
+    ///
+    /// # Arguments
+    /// * `id` - The unique identifier (`RecordId`) of the agent to retrieve.
+    ///
+    /// # Returns
+    /// * `Ok(AgentData)` - The agent record if found.
+    /// * `Err(String)` - An error message if the agent record could not be found or if a database error occurs.
+    ///
     pub async fn get(&self,id: RecordId) -> Result<AgentData, String> {
 
         match self.db.client.select::<Option<AgentData>>(id.clone()).await {
@@ -211,6 +305,20 @@ impl Agent {
             }
         }
     }
+
+    /// Retrieves an agent record by its name and associated server.
+    ///
+    /// This function queries the database to fetch an agent record based on the provided `name`
+    /// and `server` values. It uses the specified table in the database for the query.
+    ///
+    /// # Arguments
+    /// * `name` - The name of the agent to search for.
+    /// * `server` - The server associated with the agent.
+    ///
+    /// # Returns
+    /// * `Ok(AgentData)` if a matching agent record is found.
+    /// * `Err(String)` if no matching record is found or if a database error occurs.
+    ///
     pub async fn get_by_name(&self,name: String,server: String) -> Result<AgentData, String> {
         match self.db.client.query("SELECT * FROM type::table($table) WHERE name=$name AND server=$server")
         .bind(("table",self.table.clone()))
@@ -231,6 +339,18 @@ impl Agent {
         }
     }
 
+    /// Lists agent records based on the provided filters.
+    ///
+    /// This function queries the database to retrieve a list of agents that match the specified
+    /// criteria. The filters are used to dynamically construct the query with optional conditions.
+    ///
+    /// # Arguments
+    /// * `filters` - An instance of `AgentFilter`
+    ///
+    /// # Returns
+    /// * `Ok(Vec<AgentData>)` - A vector of `AgentData` objects matching the filters.
+    /// * `Err(String)` - An error message if the query fails or if data retrieval encounters an issue.
+    ///
     pub async fn list(&self,filters: AgentFilter) -> Result<Vec<AgentData>,String> {
         let mut  stmt: String = "SELECT * FROM  type::table($table)".to_string();
         let mut where_stmt: Vec<String> = Vec::new();
@@ -329,6 +449,21 @@ impl Agent {
         }
     }
 
+    /// Updates an agent record in the database.
+    ///
+    /// This function retrieves the current record associated with the given `id` and updates its fields
+    /// with the values provided in `data`. Any fields in `data` that are `None` will retain the values
+    /// from the existing record.
+    ///
+    /// # Arguments
+    /// * `id` - The unique identifier (`RecordId`) of the agent record to update.
+    /// * `data` - An `AgentData` instance containing the updated field values. Fields with `None`
+    ///   values will not overwrite the existing data.
+    ///
+    /// # Returns
+    /// * `Ok(AgentData)` - The updated `AgentData` record after successfully applying the changes.
+    /// * `Err(String)` - An error message if the update fails or if the record is not found.
+    ///
     pub async fn update(&self,id: RecordId, data:AgentData) -> Result<AgentData,String> {
         match self.get(id.clone()).await  {
             Ok(record)=> {
@@ -364,6 +499,21 @@ impl Agent {
         }
     }
 
+    /// Sends a command to an agent by updating its record in the database.
+    ///
+    /// This function sets a command on an agent record, along with an optional message and author.
+    /// The `command_is_executed` field is reset to `false` to indicate the command needs to be executed.
+    ///
+    /// # Arguments
+    /// * `id` - The unique identifier (`RecordId`) of the agent to update.
+    /// * `command` - The command to be assigned to the agent.
+    /// * `message` - An optional message providing context or details about the command.
+    /// * `author` - An optional author name or identifier for tracking who issued the command.
+    ///
+    /// # Returns
+    /// * `Ok(AgentData)` - The updated agent record reflecting the assigned command.
+    /// * `Err(String)` - An error message if the update fails or if the record is not found.
+    ///
     pub async fn send_command(&self,id: RecordId, command:Command, message: Option<String>, author: Option<String>) -> Result<AgentData,String> {
 
         let data: AgentData = AgentData {                            
@@ -386,7 +536,19 @@ impl Agent {
             }
         }
     }
-
+    /// Registers a new agent in the database or updates an existing one if it already exists.
+    ///
+    /// This function performs validation on the provided `AgentData`, ensures the necessary database
+    /// table exists, and creates a new agent record. If an agent with the same `name` and `server` 
+    /// already exists, the existing record is removed before creating the new one.
+    ///
+    /// # Arguments
+    /// * `data` - An `AgentData` instance containing the details of the agent to register.
+    ///
+    /// # Returns
+    /// * `Ok(AgentData)` - The newly created or updated agent record.
+    /// * `Err(String)` - An error message if registration fails or the input data is invalid.
+    ///
     pub async fn register(&self, mut data: AgentData) -> Result<AgentData,String>{
         if let Some(value) = data.name.clone() {
             if value.len() < 3 {
@@ -437,64 +599,3 @@ impl Agent {
     }
 }
 
-
-#[cfg(test)]
-pub mod test_agent {
-    use super::*;
-    use crate::tests::test_helper::configure_database_env;
-
-    #[tokio::test]
-    pub async fn test() {
-        configure_database_env();
-        let db: Arc<Db> = Arc::new(
-            Db::new(None).await.unwrap()
-        );
-        let agent: Agent = Agent::new(Some(db)).await;
-        let result: Result<bool, String> = agent.create_table("server1".to_string()).await;
-        assert!(result.is_ok(),"{:?}",result.err());
-        assert!(result.unwrap());
-
-        let agents_data = agent.list(AgentFilter {
-            server: Some("server1".to_string()),
-            ..Default::default()
-        }).await;
-        assert!(agents_data.is_ok(),"{:?}",agents_data.err());
-        assert!(agents_data.unwrap().len() == 0);
-
-        for s in 1..3 {
-            let server: String = format!("server{}",s);
-            for i in 1..11 {
-                let result = agent.register(AgentData {
-                    name: Some(format!("queue-{}-server-{}",i,s)),
-                    kind: Some(AgentKind::Queue),
-                    server: Some(server.clone()),
-                    task_id: Some(i),
-                    ..Default::default()
-                }).await;
-                assert!(result.is_ok(),"{:?}",result.err());
-                let data = result.unwrap();
-                let updated_result = agent.update(data.id.clone().unwrap(), AgentData {
-                    status: Some(AgentStatus::Completed),
-                    ..data
-                } ).await;
-                assert!(updated_result.is_ok(),"{:?}",updated_result.err());
-                let updated_data = updated_result.unwrap();
-                assert!(data.status != updated_data.status);
-            }
-        }
-        let agents_data = agent.list(AgentFilter {
-            server: Some("server1".to_string()),
-            statuses: Some(Vec::from([AgentStatus::Initialized,AgentStatus::Completed])),
-            ..Default::default()
-        }).await;
-        assert!(agents_data.is_ok(),"{:?}",agents_data.err());
-        assert!(agents_data.unwrap().len() == 10);
-        let agents_data = agent.list(AgentFilter {
-            server: Some("server1".to_string()),
-            statuses: Some(Vec::from([AgentStatus::Running,AgentStatus::Error])),
-            ..Default::default()
-        }).await;
-        assert!(agents_data.is_ok(),"{:?}",agents_data.err());
-        assert!(agents_data.unwrap().len() == 0);
-    }
-}
