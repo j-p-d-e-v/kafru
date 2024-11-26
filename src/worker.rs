@@ -339,7 +339,7 @@ impl Worker {
                                                         }).await {
                                                             error!("task execution result error [{}]: {}", record_name, error);
                                                         }      
-                                                        match handler().run(record.parameters.unwrap()).await {
+                                                        match handler().run(record.parameters.unwrap(),Some(queue_id.clone()),Some(agent_id.clone())).await {
                                                             Ok(_) => {
                                                                 if let Err(error) = queue.set_status(queue_id.clone(),QueueStatus::Completed,None).await {
                                                                     error!("task execution result error [{}]: {}", record_name, error);

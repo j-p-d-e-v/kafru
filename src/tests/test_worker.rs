@@ -6,7 +6,7 @@ mod test_worker {
     use crate::tests::test_helper::configure_database_env;
     use crate::queue::{Queue, QueueData};
     use crate::worker::Worker;
-    use crate::task::{ TaskHandler, TaskRegistry };
+    use crate::task::{ TaskHandler, TaskRegistry, RecordId };
     use fake::{
         Fake,
         faker::{
@@ -26,7 +26,9 @@ mod test_worker {
     pub struct MyTestStructA;
     #[async_trait]
     impl TaskHandler for MyTestStructA {
-        async fn run(&self, params: std::collections::HashMap<String,Value>) -> Result<(),String> {
+        async fn run(&self, params: std::collections::HashMap<String,Value>, queue_id: Option<RecordId>,  agent_id: Option<RecordId>) -> Result<(),String> {
+            println!("My Queue Id: {:#?}",queue_id);       
+            println!("My Agent Id: {:#?}",agent_id);       
             println!("My Parameters: {:#?}",params);            
             let value = rand::thread_rng().gen_range(Range{ start:0, end: 100 });
             for i in 0..20 {

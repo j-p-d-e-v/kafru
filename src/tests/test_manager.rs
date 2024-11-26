@@ -15,7 +15,7 @@ mod test_manager {
     use std::ops::Range;
     use std::collections::HashMap;
     use serde_json::{Value, Number};
-    use crate::task::{ TaskHandler, TaskRegistry };
+    use crate::task::{ TaskHandler, TaskRegistry, RecordId};
     use rand::{self, Rng};
     use std::sync::Arc;
     use crate::Command;
@@ -28,8 +28,10 @@ mod test_manager {
     use crate::manager::Manager;
     #[async_trait]
     impl TaskHandler for MyTestStructA {
-        async fn run(&self, params: std::collections::HashMap<String,Value>) -> Result<(),String> {
-            println!("My Parameters: {:#?}",params);            
+        async fn run(&self, params: std::collections::HashMap<String,Value>, queue_id: Option<RecordId>,  agent_id: Option<RecordId>) -> Result<(),String> {
+            println!("My Queue Id: {:#?}",queue_id);            
+            println!("My Agent Id: {:#?}",agent_id);            
+            println!("My Parameters: {:#?}",params);    
             println!("{}",Sentence(Range{start: 1, end:3}).fake::<String>());
             println!("message: {}",self.message);
             let sleep_ms = rand::thread_rng().gen_range(Range{ start:3, end: 10 }) * 1000;

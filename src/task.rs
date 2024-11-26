@@ -2,6 +2,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use async_trait::async_trait;
 
+pub type RecordId = surrealdb::RecordId;
+
 /// A trait for handling tasks.
 /// 
 /// Implement this trait for structs that need to handle specific tasks. The `run` method will be called to execute the task.
@@ -12,12 +14,14 @@ use async_trait::async_trait;
 /// 
 /// # Parameters
 /// - `params`: A `HashMap` of parameters for the task, where the keys are `String` and values are `serde_json::Value`.
+/// - `queue_id`: (Optional) The id of the queue, the task is associated.
+/// - `agent_id`: (Optional) The id of the agent, the task is associated.
 /// 
 /// # Returns
 /// Returns a `Result<(), String>`. On success, returns `Ok(())`. On failure, returns `Err(String)` with an error message.
 #[async_trait]
 pub trait TaskHandler: Send {
-    async fn run(&self, params: HashMap<String, Value>) -> Result<(), String>;
+    async fn run(&self,  params: HashMap<String, Value>,queue_id: Option<RecordId>, agent_id: Option<RecordId>) -> Result<(), String>;
 }
 
 /// A factory function type for creating `TaskHandler` instances.

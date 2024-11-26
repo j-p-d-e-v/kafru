@@ -4,7 +4,8 @@ mod test_task_handler {
     use async_trait::async_trait;
     use crate::task::{
         TaskHandler,
-        TaskRegistry
+        TaskRegistry,
+        RecordId,
     };
     use serde_json::Value;
 
@@ -12,7 +13,7 @@ mod test_task_handler {
 
     #[async_trait]
     impl TaskHandler for MyTestStructA {
-        async fn run(&self, _params: std::collections::HashMap<String,Value>) -> Result<(),String> {
+        async fn run(&self, _params: std::collections::HashMap<String,Value>, _queue_id: Option<RecordId>,  _agent_id: Option<RecordId>) -> Result<(),String> {
             Ok(())
         }
     }
@@ -20,7 +21,7 @@ mod test_task_handler {
 
     #[async_trait]
     impl TaskHandler for MyTestStructB {
-        async fn run(&self, _params: std::collections::HashMap<String,Value>) -> Result<(),String> {
+        async fn run(&self, _params: std::collections::HashMap<String,Value>, _queue_id: Option<RecordId>,  _agent_id: Option<RecordId>) -> Result<(),String> {
             Ok(())
         }
     }

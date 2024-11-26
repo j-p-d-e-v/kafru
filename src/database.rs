@@ -26,15 +26,15 @@ impl Default for DbConnection {
     /// | `KAFRU_DB_PASSWORD`  | The database password.                                                                    | `kafru_password`   |
     /// | `KAFRU_DB_PORT`      | The port number of the database.                                                          | `4030`             |
     /// | `KAFRU_DB_HOST`      | The database host or IP address.                                                          | `127.0.0.1`        |
-    /// | `KAFRU_DB_NAMESPACE` | The database namespace, useful for separating production and testing databases.            | `kafru`            |
+    /// | `KAFRU_DB_NAMESPACE` | The database namespace, useful for separating production and testing databases.            | `kafru_dev`            |
     /// | `KAFRU_DB_NAME`      | The name of the database.                                                                 | `kafru_db`         |
     fn default() -> Self {
         Self {
-            username: env::var("KAFRU_DB_USERNAME").unwrap_or(String::from("kafry_admin")),
+            username: env::var("KAFRU_DB_USERNAME").unwrap_or(String::from("kafru_admin")),
             password: env::var("KAFRU_DB_PASSWORD").unwrap_or(String::from("kafru_password")),
             port: env::var("KAFRU_DB_PORT").unwrap_or("4030".to_string()).parse::<u16>().unwrap(),
             host: env::var("KAFRU_DB_HOST").unwrap_or(String::from("127.0.0.1")),
-            namespace: env::var("KAFRU_DB_NAMESPACE").unwrap_or(String::from("karfru")),
+            namespace: env::var("KAFRU_DB_NAMESPACE").unwrap_or(String::from("kafru_dev")),
             database: env::var("KAFRU_DB_NAME").unwrap_or(String::from("kafru_db")),
         }
     }
