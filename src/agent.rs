@@ -166,9 +166,12 @@ impl Agent {
     ///   the default table name.
     ///
     pub async fn new(db: Option<Arc<Db>>) -> Self {
-        let db: Arc<Db> = db.unwrap_or(
+        let db: Arc<Db> = if let Some(value) = db {
+            value.clone()
+        }
+        else {
             Arc::new(Db::new(None).await.unwrap())
-        );
+        };
         let table: String = "kafru_agents".to_string();
         Self {
             db,

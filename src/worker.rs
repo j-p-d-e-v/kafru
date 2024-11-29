@@ -253,6 +253,7 @@ impl Worker {
                     kind: Some(AgentKind::Queue),
                     server: Some(self.server.clone()),
                     status: Some(AgentStatus::Running),
+                    author: Some(self.author.clone()),
                     ..Default::default()
                 }).await?;
                 worker_tasks.add(queue_name.clone(), 0,  None).await;

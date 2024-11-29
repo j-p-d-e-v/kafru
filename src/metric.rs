@@ -69,9 +69,10 @@ impl<'a> Metric<'a>{
     /// - `db`: An optional `Arc<Db>` instance representing a shared database connection.
     ///         If provided, the `Metric` will use this connection for its operations.
     pub async fn new(db: Option<Arc<Db>>) -> Self {
-        let db: Arc<Db> = if db.is_some() {
-            db.unwrap().clone()
-        } else {
+        let db: Arc<Db> = if let Some(value) = db {
+            value.clone()
+        }
+        else {
             Arc::new(Db::new(None).await.unwrap())
         };
         Self { 
