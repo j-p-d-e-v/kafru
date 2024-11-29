@@ -126,8 +126,11 @@ impl Default for AgentData {
 #[derive(Debug,Clone,Deserialize,Serialize, Default)]
 pub struct AgentFilter {
     pub id: Option<RecordId>,
+    pub ids: Option<Vec<RecordId>>,
     pub parent_id: Option<RecordId>,
+    pub parent_ids: Option<Vec<RecordId>>,
     pub queue_id: Option<RecordId>,
+    pub queue_ids: Option<Vec<RecordId>>,
     pub name: Option<String>,
     pub names: Option<Vec<String>>,
     pub kind: Option<AgentKind>,
@@ -395,6 +398,12 @@ impl Agent {
         if filters.names.is_some() {
             where_stmt.push("name IN $names".to_string());
         }
+        if filters.queue_ids.is_some() {
+            where_stmt.push("queue_id IN $queue_ids".to_string());
+        }
+        if filters.ids.is_some() {
+            where_stmt.push("id IN $ids".to_string());
+        }
         if !where_stmt.is_empty() {
             stmt = format!("{} WHERE {}",stmt,where_stmt.join(" AND "));
         }
@@ -434,6 +443,12 @@ impl Agent {
         }
         if let Some(values) = filters.commands {
             query = query.bind(("commands",values));
+        }
+        if let Some(values) = filters.queue_ids {
+            query = query.bind(("queue_ids",values));
+        }
+        if let Some(values) = filters.ids {
+            query = query.bind(("ids",values));
         }
         if let Some(values) = filters.names {
             query = query.bind(("names",values));
