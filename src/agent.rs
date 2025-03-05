@@ -68,7 +68,7 @@ impl fmt::Display for AgentStatus {
 /// serializable using `serde`, and the `skip_serializing_if` attribute ensures that fields with 
 /// `None` values are not included during serialization.
 ///
-#[derive(Debug,Clone,Deserialize,Serialize)]
+#[derive(Debug,Clone,Deserialize,Serialize,PartialEq)]
 pub struct AgentData {
     #[serde(skip_serializing_if="Option::is_none")]
     pub id: Option<RecordId>,

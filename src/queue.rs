@@ -28,7 +28,7 @@ impl std::fmt::Display for QueueStatus {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 /// Attributes for filtering task queues:
 /// 
 /// - `id`: *(Optional)* Automatically assigned upon task creation.

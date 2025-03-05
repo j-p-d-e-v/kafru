@@ -33,7 +33,7 @@ pub mod tests;
 // Agent for sending commands/signals to worker agent, scheduler agent
 pub mod agent;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 /// The available commands that can be send to scheduler and worker.
 pub enum Command {
     /// Force shutdown the scheduler, it will not wait for the execution to complete.
